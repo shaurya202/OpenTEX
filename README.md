@@ -1,5 +1,7 @@
 # OpenTEX
 
+![OpenTEX landing page](.assets/opentex-screenshot.png)
+
 Open-source AI LaTeX workspace that converts handwritten math, physics, and engineering notes or PDFs into clean LaTeX, Beamer slide decks, Word/OpenDocument/Typst/Markdown files, and TikZ vector diagrams.
 
 ## Overview
