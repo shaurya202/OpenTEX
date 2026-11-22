@@ -6,7 +6,7 @@
 //   4. starts usage counting: app_opened now, active_session every 30 minutes (POST /api/v1/telemetry).
 import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, writeSync } from "node:fs";
-import { arch, homedir, hostname, platform } from "node:os";
+import { arch, homedir, hostname, platform, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -77,34 +77,45 @@ export function appToken(): string {
 /** ~/Library/Application Support/publik, %LOCALAPPDATA%\publik, ~/.config/publik: shared by every publik app. */
 function publikDir(): string {
   const os = platform();
+  const home = homedir();
   const base =
     os === "darwin"
-      ? join(homedir(), "Library", "Application Support")
+      ? join(home, "Library", "Application Support")
       : os === "win32"
-        ? (process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"))
-        : (process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"));
-  return join(base, "publik");
+        ? (process.env.LOCALAPPDATA || join(home, "AppData", "Local"))
+        : (process.env.XDG_CONFIG_HOME || (existsSync(home) ? join(home, ".config") : tmpdir()));
+  const dir = join(base, "publik");
+  try {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    return dir;
+  } catch {
+    return join(tmpdir(), "publik");
+  }
 }
 
 export const credentialPath = () => join(publikDir(), "apps", `${APP_SLUG}.json`);
 
+let memCredential: PublikCredential | null = null;
+
 export function readCredential(): PublikCredential | null {
   try {
     const c = JSON.parse(readFileSync(credentialPath(), "utf8")) as PublikCredential;
-    return typeof c.key === "string" && c.key.startsWith("pk_") ? c : null;
-  } catch {
+    if (typeof c.key === "string" && c.key.startsWith("pk_")) return (memCredential = c);
     return null;
+  } catch {
+    return memCredential;
   }
 }
 
 export function writeCredential(c: PublikCredential | null): void {
-  const file = credentialPath();
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, JSON.stringify(c ?? {}, null, 2), { mode: 0o600 });
+  memCredential = c && typeof c.key === "string" && c.key.startsWith("pk_") ? c : null;
   try {
+    const file = credentialPath();
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify(c ?? {}, null, 2), { mode: 0o600 });
     chmodSync(file, 0o600);
   } catch {
-    // Windows filesystems may ignore POSIX chmod
+    // Serverless/read-only filesystems or Windows chmod may fail; memCredential keeps the session alive
   }
 }
 

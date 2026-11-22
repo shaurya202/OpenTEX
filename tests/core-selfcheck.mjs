@@ -20,7 +20,9 @@ function loadTsModule(relPath) {
     return moduleCache.get(absPath).exports;
   }
 
-  const source = fs.readFileSync(absPath, 'utf8');
+  const source = fs
+    .readFileSync(absPath, 'utf8')
+    .replace(/\bimport\.meta\.url\b/g, 'require("node:url").pathToFileURL(__filename).href');
   const transpiled = ts.transpileModule(source, {
     fileName: absPath,
     compilerOptions: {
@@ -64,6 +66,7 @@ function resolveTsFile(base) {
 async function run() {
   const { renderLatexDocument, parseBeamerSlides } = loadTsModule('@/lib/latex-renderer.ts');
   const { executePublikAction } = loadTsModule('@/lib/publik.ts');
+  const { credentialPath, readCredential, writeCredential } = loadTsModule('@/lib/publik-sdk.ts');
   const { downloadConvertedDocument, printCompiledPdf } = loadTsModule('@/lib/exporters.ts');
   const { tokenizeLatexLine } = loadTsModule('@/components/app/LatexEditorPane.tsx');
 
@@ -116,7 +119,31 @@ async function run() {
   assert.ok(gridIds.length >= 2 && new Set(gridIds).size === gridIds.length);
   assert.ok(docHtml.includes('not supported natively in-browser'));
 
-  // 4. Publik fallback safety checks
+  // 4. Publik fallback safety checks & serverless missing-homedir resilience
+  const priorCred = readCredential();
+  const prevLocalAppData = process.env.LOCALAPPDATA;
+  const prevXdg = process.env.XDG_CONFIG_HOME;
+  try {
+    const unwritableBase = path.join(fileURLToPath(import.meta.url), 'sbx_user1051', '.config');
+    process.env.LOCALAPPDATA = unwritableBase;
+    process.env.XDG_CONFIG_HOME = unwritableBase;
+    assert.ok(path.isAbsolute(credentialPath()));
+    writeCredential({
+      key: 'pk_test_serverless_fallback',
+      base_url: 'https://publikhq.com/api/v1',
+      install_id: '00000000-0000-4000-8000-000000000000',
+      claim_url: null,
+      choice: 'publik',
+    });
+    assert.equal(readCredential()?.key, 'pk_test_serverless_fallback');
+    writeCredential(priorCred);
+  } finally {
+    if (prevLocalAppData === undefined) delete process.env.LOCALAPPDATA;
+    else process.env.LOCALAPPDATA = prevLocalAppData;
+    if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = prevXdg;
+  }
+
   const testRes = await executePublikAction({ action: 'test', config: { baseUrl: '', apiKey: '', professionalModel: 'publik-smart', turboModel: 'publik-fast' } });
   assert.equal(testRes.result.ok, false);
 

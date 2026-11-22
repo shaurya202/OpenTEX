@@ -1,11 +1,33 @@
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { executePublikAction, type PublikActionPayload } from '@/lib/publik';
-import { MODELS, resolveProvider, topUpUrlFrom402 } from '@/lib/publik-sdk';
+import {
+  MODELS,
+  readCredential,
+  resolveProvider,
+  topUpUrlFrom402,
+  writeCredential,
+  type PublikCredential,
+} from '@/lib/publik-sdk';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   try {
+    if (!readCredential()) {
+      try {
+        const raw = (await cookies()).get('publik_cred')?.value;
+        if (raw) {
+          const parsed = JSON.parse(raw) as PublikCredential;
+          if (typeof parsed?.key === 'string' && parsed.key.startsWith('pk_')) {
+            writeCredential(parsed);
+          }
+        }
+      } catch {
+        // Ignore malformed cookie
+      }
+    }
+
     const body = (await request.json()) as Partial<PublikActionPayload> | null;
     if (!body || typeof body.action !== 'string') {
       return NextResponse.json(

@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import {
   APP_SLUG,
@@ -34,7 +35,43 @@ function sanitizeWalletSummary(w: Wallet | null) {
   };
 }
 
+const CRED_COOKIE = 'publik_cred';
+
+async function syncCredentialFromCookie() {
+  if (readCredential()) return;
+  try {
+    const raw = (await cookies()).get(CRED_COOKIE)?.value;
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as PublikCredential;
+    if (typeof parsed?.key === 'string' && parsed.key.startsWith('pk_')) {
+      writeCredential(parsed);
+    }
+  } catch {
+    // Ignore malformed cookie
+  }
+}
+
+async function persistCredentialCookie() {
+  try {
+    const jar = await cookies();
+    const cred = readCredential();
+    if (cred) {
+      jar.set(CRED_COOKIE, JSON.stringify(cred), {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 365 * 24 * 60 * 60,
+      });
+    } else {
+      jar.delete(CRED_COOKIE);
+    }
+  } catch {
+    // Ignore cookie write errors outside request context
+  }
+}
+
 async function computeStatus() {
+  await syncCredentialFromCookie();
   const token = appToken();
   const hasAppToken = token.startsWith('pat_');
   const hasEnvKey = Boolean(process.env.PUBLIK_API_KEY?.trim());
@@ -153,6 +190,7 @@ async function computeStatus() {
 export async function GET() {
   try {
     const status = await computeStatus();
+    await persistCredentialCookie();
     return NextResponse.json(status);
   } catch (err) {
     return NextResponse.json(
@@ -164,6 +202,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    await syncCredentialFromCookie();
     const body = (await req.json().catch(() => ({}))) as {
       action?: string;
       choice?: Choice | null;
@@ -174,6 +213,7 @@ export async function POST(req: Request) {
         body.choice === 'publik' || body.choice === 'own_key' ? body.choice : null;
       setChoice(nextChoice);
       const status = await computeStatus();
+      await persistCredentialCookie();
       return NextResponse.json({ success: true, ...status });
     }
 
@@ -191,6 +231,7 @@ export async function POST(req: Request) {
     }
 
     const status = await computeStatus();
+    await persistCredentialCookie();
     return NextResponse.json(status);
   } catch (err) {
     return NextResponse.json(
