@@ -10,6 +10,8 @@ import {
   FileText,
   Folder,
   Loader2,
+  Maximize2,
+  Minimize2,
   PenLine,
   Presentation,
   RotateCcw,
@@ -173,12 +175,14 @@ export default function ConvertWorkspacePage() {
 
   // Sketchpad state (canvas holds transparent ink layer over CSS .paper-grid)
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sketchContainerRef = useRef<HTMLDivElement>(null);
   const isDrawingRef = useRef(false);
   const sketchHistoryRef = useRef<ImageData[]>([]);
   const [sketchTool, setSketchTool] = useState<'pen' | 'eraser'>('pen');
   const [inkColor, setInkColor] = useState<'#0f172a' | '#1d4ed8'>('#0f172a');
   const [hasSketchInk, setHasSketchInk] = useState(false);
   const [canUndoSketch, setCanUndoSketch] = useState(false);
+  const [isSketchFullscreen, setIsSketchFullscreen] = useState(false);
 
   // Options state
   const [model, setModel] = useState<ConversionModel>('professional');
@@ -234,11 +238,79 @@ export default function ConvertWorkspacePage() {
     if (!ctx) return;
     const previous = sketchHistoryRef.current.pop();
     if (previous) {
-      ctx.putImageData(previous, 0, 0);
+      if (previous.width === canvas.width && previous.height === canvas.height) {
+        ctx.putImageData(previous, 0, 0);
+      } else {
+        const temp = document.createElement('canvas');
+        temp.width = previous.width;
+        temp.height = previous.height;
+        temp.getContext('2d')?.putImageData(previous, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const scale =
+          canvas.width >= previous.width && canvas.height >= previous.height
+            ? 1
+            : Math.min(canvas.width / previous.width, canvas.height / previous.height);
+        ctx.drawImage(temp, 0, 0, previous.width * scale, previous.height * scale);
+      }
     }
     setCanUndoSketch(sketchHistoryRef.current.length > 0);
     setHasSketchInk(canvasHasVisibleInk(ctx, canvas.width, canvas.height));
   };
+
+  // Keep canvas resolution matched to its container (including full-screen) without losing ink
+  useEffect(() => {
+    if (inputMode !== 'sketch') return;
+    const container = sketchContainerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
+
+    const syncCanvasSize = () => {
+      const rect = container.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const targetW = Math.round(rect.width * dpr);
+      const targetH = Math.round(rect.height * dpr);
+      if (canvas.width === targetW && canvas.height === targetH) return;
+
+      let snapshot: HTMLCanvasElement | null = null;
+      if (canvas.width > 0 && canvas.height > 0) {
+        snapshot = document.createElement('canvas');
+        snapshot.width = canvas.width;
+        snapshot.height = canvas.height;
+        snapshot.getContext('2d')?.drawImage(canvas, 0, 0);
+      }
+
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext('2d');
+      if (ctx && snapshot) {
+        const scale =
+          targetW >= snapshot.width && targetH >= snapshot.height
+            ? 1
+            : Math.min(targetW / snapshot.width, targetH / snapshot.height);
+        ctx.drawImage(snapshot, 0, 0, snapshot.width * scale, snapshot.height * scale);
+      }
+    };
+
+    syncCanvasSize();
+    const observer = new ResizeObserver(syncCanvasSize);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [inputMode, isSketchFullscreen]);
+
+  useEffect(() => {
+    if (!isSketchFullscreen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsSketchFullscreen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isSketchFullscreen]);
 
   const exportSketchWhitePng = (): string | undefined => {
     const src = canvasRef.current;
@@ -369,8 +441,9 @@ export default function ConvertWorkspacePage() {
     ctx.moveTo(pt.x, pt.y);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     ctx.strokeStyle = sketchTool === 'eraser' ? 'rgba(0,0,0,1)' : inkColor;
-    ctx.lineWidth = sketchTool === 'eraser' ? 20 : 3.2;
+    ctx.lineWidth = (sketchTool === 'eraser' ? 20 : 2.8) * dpr;
     ctx.lineTo(pt.x + 0.01, pt.y + 0.01);
     ctx.stroke();
     if (sketchTool === 'pen') setHasSketchInk(true);
@@ -442,6 +515,7 @@ export default function ConvertWorkspacePage() {
       activeFileName = `sketch_${new Date().toISOString().slice(11, 19).replace(/:/g, '-')}.png`;
       activeMime = 'image/png';
       activeHint = activeHint || 'Hand-drawn mathematical equation sketch from OpenTEX sketchpad.';
+      setIsSketchFullscreen(false);
     } else if (!activeFileName || !activeDataUrl) {
       setErrorMsg('Please upload an image/PDF or choose one of the sample handwritten notes.');
       return;
@@ -756,9 +830,22 @@ export default function ConvertWorkspacePage() {
               </div>
 
               {/* Draw Math Sketchpad (kept mounted to preserve ink across mode switches) */}
-              <div className={inputMode === 'sketch' ? 'space-y-3 p-4' : 'hidden'}>
+              <div
+                className={
+                  inputMode !== 'sketch'
+                    ? 'hidden'
+                    : isSketchFullscreen
+                      ? 'fixed inset-0 z-50 flex flex-col gap-3 bg-white p-3 sm:p-4 dark:bg-slate-950'
+                      : 'space-y-3 p-4'
+                }
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-1.5">
+                    {isSketchFullscreen && (
+                      <span className="mr-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
+                        Math Sketchpad
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={() => setSketchTool('pen')}
@@ -818,7 +905,7 @@ export default function ConvertWorkspacePage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
                       onClick={handleUndoSketch}
@@ -836,10 +923,44 @@ export default function ConvertWorkspacePage() {
                       <RotateCcw className="h-3.5 w-3.5" />
                       Clear
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsSketchFullscreen((v) => !v)}
+                      aria-label={isSketchFullscreen ? 'Exit full screen' : 'Full screen sketchpad'}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                    >
+                      {isSketchFullscreen ? (
+                        <>
+                          <Minimize2 className="h-3.5 w-3.5" />
+                          Exit Full Screen
+                        </>
+                      ) : (
+                        <>
+                          <Maximize2 className="h-3.5 w-3.5" />
+                          Full Screen
+                        </>
+                      )}
+                    </button>
+                    {isSketchFullscreen && (
+                      <button
+                        type="button"
+                        onClick={handleGenerate}
+                        disabled={!canGenerate}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#0071E3] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0077ED] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Cpu className="h-3.5 w-3.5" />
+                        Generate LaTeX
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                <div className="paper-grid overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700">
+                <div
+                  ref={sketchContainerRef}
+                  className={`paper-grid overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 ${
+                    isSketchFullscreen ? 'min-h-0 flex-1' : 'aspect-[760/340] w-full'
+                  }`}
+                >
                   <canvas
                     ref={canvasRef}
                     width={760}
@@ -848,12 +969,14 @@ export default function ConvertWorkspacePage() {
                     onPointerMove={handlePointerMove}
                     onPointerUp={handlePointerUp}
                     onPointerCancel={handlePointerUp}
-                    className="aspect-[760/340] w-full touch-none cursor-crosshair"
+                    className="block h-full w-full touch-none cursor-crosshair"
                   />
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Hand-draw any equation, matrix, or diagram above and click Generate LaTeX.
-                </p>
+                {!isSketchFullscreen && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Hand-draw any equation, matrix, or diagram above and click Generate LaTeX.
+                  </p>
+                )}
               </div>
             </div>
           </div>

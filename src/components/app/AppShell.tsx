@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { BrandMark } from '@/components/BrandMark';
 import {
   ArrowLeft,
   BookOpen,
@@ -105,9 +106,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           }`}
         >
           <Link href="/app" className="flex items-center gap-2.5 overflow-hidden">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#1D1D1F] font-serif text-sm font-semibold text-white dark:bg-[#F5F5F7] dark:text-[#1D1D1F]">
-              &part;
-            </div>
+            <BrandMark className="h-8 w-8" />
             {(!collapsed || isMobile) && (
               <div className="min-w-0">
                 <div className="text-[15px] font-semibold tracking-tight">
@@ -267,9 +266,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Menu className="h-5 w-5" />
           </button>
           <Link href="/app" className="flex items-center gap-2 font-semibold">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#1D1D1F] font-serif text-xs font-semibold text-white dark:bg-[#F5F5F7] dark:text-[#1D1D1F]">
-              &part;
-            </span>
+            <BrandMark className="h-7 w-7" />
             <span>
               Open<span className="text-[#0071E3]">TEX</span>
             </span>

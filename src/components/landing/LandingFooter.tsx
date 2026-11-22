@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { BrandMark } from '@/components/BrandMark';
 
 export function LandingFooter() {
   return (
@@ -7,9 +8,7 @@ export function LandingFooter() {
         <div className="grid gap-10 md:grid-cols-12">
           <div className="md:col-span-5">
             <Link href="/" className="inline-flex items-center gap-2 text-base font-semibold text-[#1D1D1F]">
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#1D1D1F] font-serif text-sm font-semibold text-white">
-                &part;
-              </span>
+              <BrandMark className="h-7 w-7" />
               <span>
                 Open<span className="text-[#0071E3]">TEX</span>
               </span>

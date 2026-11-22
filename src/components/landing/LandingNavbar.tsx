@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Menu, X } from 'lucide-react';
+import { BrandMark } from '@/components/BrandMark';
 
 const NAV_LINKS = [
   { label: 'Workflow', href: '#workflow' },
@@ -19,9 +20,7 @@ export function LandingNavbar() {
     <header className="apple-glass sticky top-0 z-50 border-b border-[#D2D2D7]/80 text-[#1D1D1F]">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5 text-[15px] font-semibold tracking-tight">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#1D1D1F] font-serif text-sm font-semibold text-white">
-            &part;
-          </span>
+          <BrandMark className="h-7 w-7" />
           <span>
             Open<span className="text-[#0071E3]">TEX</span>
           </span>
