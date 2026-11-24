@@ -283,13 +283,25 @@ function ToolsWorkspaceInner() {
       setStatusBanner({ text: `Applied ${template} template.`, provider: res.provider });
     });
 
-  const handleConvert = () =>
-    runAction('Convert', async () => {
+  const handleConvert = async () => {
+    setBusy(true);
+    setErrorMsg(null);
+    const ext = convertTarget === 'markdown' ? 'md' : convertTarget === 'typst' ? 'typ' : convertTarget;
+    try {
       const res = await convertFormat({ latex, format: convertTarget });
       setConvertedPreview(res.result);
+      setStatusBanner({
+        text: `Downloaded .${ext}.`,
+        provider: res.provider,
+      });
+      setBusy(false);
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
       downloadConvertedDocument(res.result, convertTarget, docTitle || 'opentex-export');
-      setStatusBanner({ text: `Converted and downloaded .${convertTarget === 'markdown' ? 'md' : convertTarget === 'typst' ? 'typ' : convertTarget}.`, provider: res.provider });
-    });
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Convert failed');
+      setBusy(false);
+    }
+  };
 
   const handleSuggest = () =>
     runAction('Suggestions', async () => {
@@ -556,7 +568,10 @@ function ToolsWorkspaceInner() {
       </div>
 
       {statusBanner && (
-        <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
+        <div
+          role="status"
+          className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200"
+        >
           <div className="flex items-center gap-2">
             <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             <span>{statusBanner.text}</span>
@@ -818,7 +833,7 @@ function ToolsWorkspaceInner() {
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0071E3] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0077ED] disabled:opacity-60"
               >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
-                Convert & Download
+                {busy ? 'Converting…' : 'Convert & Download'}
               </button>
               {convertedPreview && (
                 <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">

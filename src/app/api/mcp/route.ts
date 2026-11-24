@@ -1,10 +1,25 @@
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { executePublikAction } from '@/lib/publik';
+import {
+  MODELS,
+  credentialFromCookieJson,
+  resolveProvider,
+  withRequestCredential,
+} from '@/lib/publik-sdk';
+import {
+  UPLOAD_TOO_LARGE_MESSAGE,
+  VERCEL_BODY_LIMIT_BYTES,
+  contentLengthTooLarge,
+} from '@/lib/upload-limit';
 import {
   DEFAULT_CONVERSION_SETTINGS,
   type ConversionModel,
   type ConversionSettings,
 } from '@/types/mathwrite';
+
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 const MCP_TOOLS = [
   {
@@ -127,6 +142,7 @@ async function invokeMcpTool(
               : 'application/pdf';
           const model: ConversionModel =
             f.model === 'turbo' ? 'turbo' : defaultModel;
+          const provider = resolveProvider(null);
           const out = await executePublikAction({
             action: 'convertToLatex',
             fileName: rawName,
@@ -135,6 +151,16 @@ async function invokeMcpTool(
             model,
             settings,
             promptHint: typeof f.promptHint === 'string' ? f.promptHint : undefined,
+            ...(provider.kind === 'publik' || provider.kind === 'own'
+              ? {
+                  config: {
+                    baseUrl: provider.baseURL,
+                    apiKey: provider.apiKey,
+                    professionalModel: MODELS.smart,
+                    turboModel: MODELS.fast,
+                  },
+                }
+              : {}),
           });
           return {
             fileName: rawName,
@@ -183,8 +209,30 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (contentLengthTooLarge(request)) {
+    return NextResponse.json({ error: UPLOAD_TOO_LARGE_MESSAGE }, { status: 413 });
+  }
+
+  let raw = '';
   try {
-    const body = (await request.json()) as Record<string, unknown>;
+    raw = await request.text();
+  } catch {
+    return NextResponse.json({ error: UPLOAD_TOO_LARGE_MESSAGE }, { status: 413 });
+  }
+  if (raw.length > VERCEL_BODY_LIMIT_BYTES) {
+    return NextResponse.json({ error: UPLOAD_TOO_LARGE_MESSAGE }, { status: 413 });
+  }
+
+  let initial = null;
+  try {
+    initial = credentialFromCookieJson((await cookies()).get('publik_cred')?.value);
+  } catch {
+    initial = null;
+  }
+
+  return withRequestCredential(initial, async () => {
+  try {
+    const body = JSON.parse(raw) as Record<string, unknown>;
 
     // JSON-RPC 2.0 support
     if (body.jsonrpc === '2.0' || typeof body.method === 'string') {
@@ -266,4 +314,5 @@ export async function POST(request: Request) {
     const message = err instanceof Error ? err.message : 'Invalid MCP request';
     return NextResponse.json({ error: message }, { status: 400 });
   }
+  });
 }

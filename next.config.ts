@@ -6,6 +6,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: path.resolve(__dirname),
+  async redirects() {
+    return [{ source: '/', destination: '/app', permanent: false }];
+  },
   images: {
     unoptimized: true,
   },

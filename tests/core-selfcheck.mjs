@@ -65,9 +65,9 @@ function resolveTsFile(base) {
 
 async function run() {
   const { renderLatexDocument, parseBeamerSlides } = loadTsModule('@/lib/latex-renderer.ts');
-  const { executePublikAction } = loadTsModule('@/lib/publik.ts');
-  const { credentialPath, readCredential, writeCredential } = loadTsModule('@/lib/publik-sdk.ts');
-  const { downloadConvertedDocument, printCompiledPdf } = loadTsModule('@/lib/exporters.ts');
+  const { executePublikAction, stripInventedScaffolding } = loadTsModule('@/lib/publik.ts');
+  const { credentialPath, readCredential, writeCredential, resolveProvider, withRequestCredential } = loadTsModule('@/lib/publik-sdk.ts');
+  const { downloadConvertedDocument, openInOverleaf, printCompiledPdf, renderPdfBytes } = loadTsModule('@/lib/exporters.ts');
   const { tokenizeLatexLine } = loadTsModule('@/components/app/LatexEditorPane.tsx');
 
   // 1. LaTeX syntax tokenizer
@@ -226,11 +226,115 @@ async function run() {
     assert.ok(docxBytes.toString('utf8').includes('word/document.xml'));
     assert.ok(docxBytes.toString('utf8').includes('&lt;script&gt;'));
     assert.ok(odtBytes.toString('utf8').includes('content.xml'));
+    downloadConvertedDocument('# Limits\n\n$x=1$', 'markdown', 'Notes');
+    assert.equal(captured.length, 3);
+    assert.match(captured[2].type, /^text\/plain/);
+    assert.doesNotMatch(captured[2].type, /markdown/);
+    assert.equal(openInOverleaf('\\begin{document}x\\end{document}', 'Notes'), false);
+    const pdfBytes = Buffer.from(renderPdfBytes('Two equations', '<p>x^2 + y^2 = 1</p>'));
+    assert.equal(pdfBytes.slice(0, 5).toString('utf8'), '%PDF-');
+    assert.ok(pdfBytes.includes(Buffer.from('Two equations')));
+    assert.ok(pdfBytes.includes(Buffer.from('x^2 + y^2 = 1')));
   } finally {
     globalThis.document = origDoc;
     globalThis.URL = origUrl;
     globalThis.window = origWin;
   }
+
+  const prevApiKey = process.env.PUBLIK_API_KEY;
+  try {
+    process.env.PUBLIK_API_KEY = 'pk_env_should_lose';
+    const chosen = resolveProvider({ baseURL: 'https://example.com/api/v1', apiKey: 'pk_user_settings_key' });
+    assert.equal(chosen.kind, 'own');
+    assert.equal(chosen.apiKey, 'pk_user_settings_key');
+    const envFallback = resolveProvider({ baseURL: 'https://example.com/api/v1', apiKey: '   ' });
+    assert.equal(envFallback.kind, 'publik');
+    assert.equal(envFallback.apiKey, 'pk_env_should_lose');
+  } finally {
+    if (prevApiKey === undefined) delete process.env.PUBLIK_API_KEY;
+    else process.env.PUBLIK_API_KEY = prevApiKey;
+  }
+
+  writeCredential({
+    key: 'pk_user_a_shared',
+    base_url: 'https://publikhq.com/api/v1',
+    install_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    claim_url: null,
+  });
+  withRequestCredential(
+    {
+      key: 'pk_user_b',
+      base_url: 'https://publikhq.com/api/v1',
+      install_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      claim_url: null,
+    },
+    () => {
+      assert.equal(readCredential()?.key, 'pk_user_b');
+      writeCredential({
+        key: 'pk_user_b2',
+        base_url: 'https://publikhq.com/api/v1',
+        install_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        claim_url: null,
+        choice: 'publik',
+      });
+      assert.equal(readCredential()?.key, 'pk_user_b2');
+    }
+  );
+  assert.equal(readCredential()?.key, 'pk_user_a_shared');
+  withRequestCredential(null, () => {
+    assert.equal(readCredential(), null);
+  });
+  writeCredential(null);
+
+  const invented = stripInventedScaffolding(
+    '\\documentclass{article}\n\\title{Mathematical Expressions}\n\\author{OpenTEX · Publik AI}\n\\begin{document}\n\\maketitle\n\\[x^2+y^2=1\\]\n\\[a+b=c\\]\n\\end{document}',
+    ''
+  );
+  assert.ok(!invented.includes('\\title'));
+  assert.ok(!invented.includes('\\maketitle'));
+  assert.ok(!invented.includes('Mathematical Expressions'));
+  assert.ok(invented.includes('x^2+y^2=1'));
+  assert.ok(invented.includes('a+b=c'));
+
+  const imageConv = await executePublikAction({
+    action: 'convertToLatex',
+    fileName: 'two-equations.png',
+    mimeType: 'image/png',
+    fileDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+    model: 'professional',
+    settings: { preset: 'balanced', latexStyle: 'standard', title: true },
+    config: { baseUrl: '', apiKey: '', professionalModel: 'publik-smart', turboModel: 'publik-fast' },
+  });
+  assert.equal(typeof imageConv.result, 'string');
+  assert.ok(!imageConv.result.includes('\\title'));
+  assert.ok(!imageConv.result.includes('\\maketitle'));
+  assert.ok(!imageConv.result.includes('Mathematical Expressions'));
+  assert.ok(!imageConv.result.includes('\\varepsilon'));
+
+  const mdConv = await Promise.race([
+    executePublikAction({
+      action: 'convertFormat',
+      latex: '\\documentclass{article}\n\\title{Limits}\n\\begin{document}\n\\maketitle\n$x^2+y^2=1$\n\\end{document}',
+      format: 'markdown',
+      config: { baseUrl: '', apiKey: '', professionalModel: 'publik-smart', turboModel: 'publik-fast' },
+    }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('markdown conversion hung')), 2000)),
+  ]);
+  assert.equal(typeof mdConv.result, 'string');
+  assert.ok(mdConv.result.includes('x^2+y^2=1'));
+  assert.ok(mdConv.result.startsWith('# Limits') || mdConv.result.includes('Limits'));
+
+  const stripped = await executePublikAction({
+    action: 'convertToLatex',
+    fileName: 'lecture.pdf',
+    mimeType: 'application/pdf',
+    fileDataUrl: pdfDataUrl,
+    model: 'professional',
+    settings: { preset: 'balanced', title: true },
+    config: { baseUrl: '', apiKey: '', professionalModel: 'publik-smart', turboModel: 'publik-fast' },
+  });
+  assert.ok(!stripped.result.includes('\\title{'));
+  assert.ok(!stripped.result.includes('\\maketitle'));
 
   console.log('ALL SELF-CHECKS PASSED');
 }

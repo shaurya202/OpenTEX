@@ -15,7 +15,13 @@ import {
   Wand2,
   X,
 } from 'lucide-react';
-import { downloadFile, openInOverleaf, printCompiledPdf } from '@/lib/exporters';
+import {
+  copyTextToClipboard,
+  downloadCompiledPdf,
+  downloadFile,
+  openInOverleaf,
+  showExportNotice,
+} from '@/lib/exporters';
 import { renderLatexDocument } from '@/lib/latex-renderer';
 import { suggestEdit } from '@/lib/publik';
 import { getAppPreferences } from '@/lib/storage';
@@ -155,7 +161,7 @@ export default function LatexEditorPane({
   const [splitPercent, setSplitPercent] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [popupNotice, setPopupNotice] = useState(false);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   // Selection & inline AI suggestions state
   const [selectionRange, setSelectionRange] = useState<{ start: number; end: number }>({
@@ -292,21 +298,31 @@ export default function LatexEditorPane({
   };
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(latex);
+    const ok = await copyTextToClipboard(latex);
+    if (ok) {
       setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      // Ignore clipboard failure
+      setActionNotice('Copied to clipboard.');
+      showExportNotice('Copied to clipboard.');
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      setCopied(false);
+      setActionNotice('Could not copy to the clipboard.');
+      showExportNotice('Could not copy to the clipboard.', 'err');
     }
   };
 
   const handleDownloadPdf = () => {
-    const opened = printCompiledPdf(renderedHtml, title);
-    if (!opened) {
-      setPopupNotice(true);
-      setTimeout(() => setPopupNotice(false), 4000);
-    }
+    const ok = downloadCompiledPdf(renderedHtml, title);
+    setActionNotice(ok ? 'PDF downloaded.' : 'Could not create the PDF.');
+  };
+
+  const handleOpenOverleaf = () => {
+    const ok = openInOverleaf(latex, title);
+    setActionNotice(
+      ok
+        ? 'Opening in Overleaf…'
+        : 'Pop-up blocked. Allow pop-ups for this site to open Overleaf.'
+    );
   };
 
   const safeSlug =
@@ -491,7 +507,7 @@ export default function LatexEditorPane({
 
           <button
             type="button"
-            onClick={() => openInOverleaf(latex, title)}
+            onClick={handleOpenOverleaf}
             disabled={!hasContent}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#138A36] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#10742D] disabled:opacity-50"
           >
@@ -503,9 +519,16 @@ export default function LatexEditorPane({
         </div>
       </div>
 
-      {popupNotice && (
-        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
-          Pop-up blocked by browser. Allow pop-ups for this site to open the PDF print dialog.
+      {actionNotice && (
+        <div
+          role="status"
+          className={`border-b px-4 py-2 text-xs ${
+            /blocked|could not/i.test(actionNotice)
+              ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-200'
+          }`}
+        >
+          {actionNotice}
         </div>
       )}
 

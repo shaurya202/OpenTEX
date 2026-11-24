@@ -8,10 +8,7 @@ export async function register() {
   }
 
   if (process.env.NEXT_PHASE !== 'phase-production-build') {
-    const { readCredential, startTelemetry } = await import('@/lib/publik-sdk');
-    const cred = readCredential();
-    if (cred || process.env.PUBLIK_API_KEY) {
-      startTelemetry();
-    }
+    const { startTelemetry } = await import('@/lib/publik-sdk');
+    if (process.env.PUBLIK_API_KEY?.trim()) startTelemetry();
   }
 }

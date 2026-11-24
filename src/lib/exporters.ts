@@ -8,43 +8,131 @@ function sanitizeFilename(name: string, fallback = 'opentex-document'): string {
   return cleaned || fallback;
 }
 
-export function openInOverleaf(latex: string, title = 'OpenTEX Document'): void {
+export function showExportNotice(message: string, tone: 'ok' | 'err' = 'ok'): void {
   if (typeof document === 'undefined') return;
+  const el = document.createElement('div');
+  el.setAttribute?.('role', 'status');
+  el.textContent = message;
+  el.style.position = 'fixed';
+  el.style.bottom = '20px';
+  el.style.left = '50%';
+  el.style.transform = 'translateX(-50%)';
+  el.style.zIndex = '80';
+  el.style.maxWidth = 'min(92vw, 440px)';
+  el.style.padding = '10px 14px';
+  el.style.borderRadius = '10px';
+  el.style.fontSize = '13px';
+  el.style.lineHeight = '1.4';
+  el.style.fontFamily = 'system-ui, sans-serif';
+  el.style.boxShadow = '0 8px 24px rgba(0,0,0,0.18)';
+  el.style.background = tone === 'err' ? '#7c2d12' : '#14532d';
+  el.style.color = '#ffffff';
+  document.body.appendChild(el);
+  setTimeout(() => {
+    el.remove?.();
+  }, 3200);
+}
+
+export function openInOverleaf(latex: string, title = 'OpenTEX Document'): boolean {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return false;
+  // Open the tab during the click, then POST into it. A form target of _blank
+  // is blocked as a popup and leaves the page with no error.
+  const popup = window.open('', '_blank');
+  if (!popup) {
+    showExportNotice('Pop-up blocked. Allow pop-ups for this site to open Overleaf.', 'err');
+    return false;
+  }
+  const targetName = `overleaf_${Date.now()}`;
+  try {
+    popup.name = targetName;
+  } catch {
+    showExportNotice('Pop-up blocked. Allow pop-ups for this site to open Overleaf.', 'err');
+    return false;
+  }
+
   const form = document.createElement('form');
   form.method = 'POST';
   form.action = 'https://www.overleaf.com/docs';
-  form.target = '_blank';
+  form.target = targetName;
   form.style.display = 'none';
 
-  const snipInput = document.createElement('input');
-  snipInput.type = 'hidden';
-  snipInput.name = 'snip';
-  snipInput.value = latex;
-  form.appendChild(snipInput);
-
-  const nameInput = document.createElement('input');
-  nameInput.type = 'hidden';
-  nameInput.name = 'snip_name';
-  nameInput.value = `${sanitizeFilename(title)}.tex`;
-  form.appendChild(nameInput);
+  const fields: Record<string, string> = {
+    snip: latex,
+    snip_name: `${sanitizeFilename(title)}.tex`,
+  };
+  for (const [name, value] of Object.entries(fields)) {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  }
 
   document.body.appendChild(form);
   form.submit();
   document.body.removeChild(form);
+  try {
+    popup.opener = null;
+  } catch {
+    // The new tab may already be navigating cross-origin.
+  }
+  showExportNotice('Opening in Overleaf…');
+  return true;
 }
 
-export function downloadFile(content: string | Blob, filename: string, mimeType: string): void {
-  if (typeof document === 'undefined') return;
-  const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
+export function downloadFile(content: string | Blob, filename: string, mimeType: string): boolean {
+  if (typeof document === 'undefined') return false;
+  // text/markdown is opened in the tab instead of saved, which leaves the convert
+  // button spinning. text/plain downloads the same way .typ already does.
+  const type = /markdown/i.test(mimeType) ? 'text/plain;charset=utf-8' : mimeType;
+  const blob = content instanceof Blob ? content : new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
+  link.rel = 'noopener';
   link.style.display = 'none';
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+  return true;
+}
+
+export async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (typeof document !== 'undefined') {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', 'true');
+      ta.style.position = 'fixed';
+      ta.style.top = '0';
+      ta.style.left = '0';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (copied) return true;
+    } catch {
+      // Fall through to the async clipboard API.
+    }
+  }
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await Promise.race([
+        navigator.clipboard.writeText(text),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('clipboard-timeout')), 1000);
+        }),
+      ]);
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
 }
 
 function escapeXmlHtml(text: string): string {
@@ -336,6 +424,178 @@ export function downloadLatexZip(conversions: ConversionItem[]): void {
   });
 
   downloadFile(buildZipBlob(entries), 'opentex-conversions.zip', 'application/zip');
+}
+
+const PDF_FOLDS: Array<[string, string]> = [
+  ['≤', '<='],
+  ['≥', '>='],
+  ['≠', '!='],
+  ['≈', '~'],
+  ['→', '->'],
+  ['←', '<-'],
+  ['↔', '<->'],
+  ['∞', 'infinity'],
+  ['α', 'alpha'],
+  ['β', 'beta'],
+  ['γ', 'gamma'],
+  ['δ', 'delta'],
+  ['ε', 'epsilon'],
+  ['θ', 'theta'],
+  ['λ', 'lambda'],
+  ['μ', 'mu'],
+  ['π', 'pi'],
+  ['σ', 'sigma'],
+  ['φ', 'phi'],
+  ['ω', 'omega'],
+  ['∫', 'integral'],
+  ['∑', 'sum'],
+  ['√', 'sqrt'],
+  ['·', '*'],
+  ['×', 'x'],
+  ['−', '-'],
+  ['–', '-'],
+  ['—', '-'],
+  ['“', '"'],
+  ['”', '"'],
+  ['‘', "'"],
+  ['’', "'"],
+];
+
+function asciiFold(text: string): string {
+  let folded = text;
+  for (const [from, to] of PDF_FOLDS) folded = folded.split(from).join(to);
+  let out = '';
+  for (const ch of folded) {
+    const code = ch.codePointAt(0) ?? 63;
+    if (code === 10 || code === 13) out += '\n';
+    else out += code >= 32 && code <= 126 ? ch : '?';
+  }
+  return out;
+}
+
+function pdfEscape(text: string): string {
+  return text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+}
+
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<annotation[\s\S]*?<\/annotation>/gi, '')
+    .replace(/<math[\s\S]*?<\/math>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h1|h2|h3|h4|li|tr|section|article)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => {
+      const code = Number(n);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : '';
+    })
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function wrapPdfLines(text: string, width = 92): string[] {
+  const lines: string[] = [];
+  for (const para of text.split(/\n/)) {
+    const words = para.split(/\s+/).filter(Boolean);
+    if (words.length === 0) {
+      lines.push('');
+      continue;
+    }
+    let line = '';
+    for (const word of words) {
+      const next = line ? `${line} ${word}` : word;
+      if (next.length > width && line) {
+        lines.push(line);
+        line = word.length > width ? word.slice(0, width) : word;
+      } else {
+        line = next.length > width ? next.slice(0, width) : next;
+      }
+    }
+    if (line) lines.push(line);
+  }
+  return lines;
+}
+
+function encodePdf(lines: string[]): Uint8Array {
+  const pageSize = 46;
+  const chunks: string[][] = [];
+  const source = lines.length > 0 ? lines : [''];
+  for (let i = 0; i < source.length; i += pageSize) chunks.push(source.slice(i, i + pageSize));
+
+  const fontId = 3;
+  const pageIds: number[] = [];
+  const contentIds: number[] = [];
+  let nextId = 4;
+  for (let i = 0; i < chunks.length; i++) {
+    pageIds.push(nextId++);
+    contentIds.push(nextId++);
+  }
+
+  const objects = new Map<number, string>();
+  objects.set(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  objects.set(
+    2,
+    `<< /Type /Pages /Kids [${pageIds.map((n) => `${n} 0 R`).join(' ')}] /Count ${pageIds.length} >>`
+  );
+  objects.set(3, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+
+  chunks.forEach((chunk, index) => {
+    const commands = chunk
+      .map((line) => `(${pdfEscape(line)}) Tj\nT*`)
+      .join('\n');
+    const stream = `BT\n/F1 11 Tf\n54 760 Td\n14 TL\n${commands}\nET`;
+    objects.set(contentIds[index], `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+    objects.set(
+      pageIds[index],
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contentIds[index]} 0 R /Resources << /Font << /F1 ${fontId} 0 R >> >> >>`
+    );
+  });
+
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  const maxId = nextId - 1;
+  for (let n = 1; n <= maxId; n++) {
+    offsets[n] = pdf.length;
+    pdf += `${n} 0 obj\n${objects.get(n)}\nendobj\n`;
+  }
+  const xrefStart = pdf.length;
+  pdf += `xref\n0 ${maxId + 1}\n`;
+  pdf += '0000000000 65535 f \n';
+  for (let n = 1; n <= maxId; n++) {
+    pdf += `${String(offsets[n]).padStart(10, '0')} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${maxId + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  return new TextEncoder().encode(pdf);
+}
+
+export function renderPdfBytes(title: string, renderedHtml: string): Uint8Array {
+  const plain = htmlToPlainText(renderedHtml);
+  const text = asciiFold([title || 'OpenTEX Document', '', plain || 'OpenTEX document'].join('\n'));
+  return encodePdf(wrapPdfLines(text));
+}
+
+export function downloadCompiledPdf(renderedHtml: string, title: string): boolean {
+  if (typeof document === 'undefined') return false;
+  try {
+    const bytes = renderPdfBytes(title, renderedHtml);
+    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    const blob = new Blob([buffer], { type: 'application/pdf' });
+    const filename = `${sanitizeFilename(title)}.pdf`;
+    const ok = downloadFile(blob, filename, 'application/pdf');
+    showExportNotice(ok ? 'PDF downloaded.' : 'Could not create the PDF.', ok ? 'ok' : 'err');
+    return ok;
+  } catch {
+    showExportNotice('Could not create the PDF.', 'err');
+    return false;
+  }
 }
 
 export function printCompiledPdf(renderedHtml: string, title: string): boolean {
