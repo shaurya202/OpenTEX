@@ -226,8 +226,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         )}
 
         <Link
-          href="/"
-          title={collapsed && !isMobile ? 'Back to Home' : undefined}
+          href="/app"
+          title={collapsed && !isMobile ? 'Workspace' : undefined}
           className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
             isDark
               ? 'text-[#A1A1A6] hover:bg-[#1C1C1E] hover:text-[#F5F5F7]'
@@ -235,7 +235,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           } ${collapsed && !isMobile ? 'justify-center px-2' : ''}`}
         >
           <ArrowLeft className="h-4 w-4 shrink-0" />
-          {(!collapsed || isMobile) && <span>Back to Home</span>}
+          {(!collapsed || isMobile) && <span>Workspace</span>}
         </Link>
       </div>
     </div>

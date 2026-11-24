@@ -1,4 +1,5 @@
 import { DEFAULT_PUBLIK_CONFIG, getPublikConfig } from '@/lib/storage';
+import { UPLOAD_TOO_LARGE_MESSAGE, VERCEL_BODY_LIMIT_BYTES } from '@/lib/upload-limit';
 import {
   DEFAULT_CONVERSION_SETTINGS,
   type ConversionModel,
@@ -207,157 +208,93 @@ function extractPdfReadableText(dataUrl?: string): string | null {
   }
 }
 
+const GENERIC_INVENTED_TITLES = new Set([
+  'mathematical expressions',
+  'mathematical expression',
+  'transcribed mathematical notes',
+  'transcribed notes',
+  'mathematical notes',
+  'math notes',
+  'math expressions',
+  'untitled',
+  'untitled document',
+  'document',
+]);
+
+function sourceEvidence(
+  payload: Extract<PublikActionPayload, { action: 'convertToLatex' }>
+): string {
+  return [
+    tryDecodeTextDataUrl(payload.fileDataUrl) || '',
+    extractPdfReadableText(payload.fileDataUrl) || '',
+    payload.promptHint || '',
+  ].join('\n');
+}
+
+/** Drop titles, authors, and \\maketitle that are not present in text we can verify. */
+export function stripInventedScaffolding(latex: string, evidence: string): string {
+  const evidenceLc = evidence.toLowerCase();
+  let out = latex.replace(/\\title\s*\{([^{}]*)\}/g, (full, rawTitle: string) => {
+    const title = rawTitle.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!title || GENERIC_INVENTED_TITLES.has(title)) return '';
+    const words = title.split(/[^a-z0-9]+/).filter((word) => word.length >= 4);
+    if (evidenceLc && words.length > 0 && words.every((word) => evidenceLc.includes(word))) return full;
+    if (!evidenceLc) return full;
+    return '';
+  });
+  out = out.replace(/\\author\s*\{([^{}]*)\}/g, (full, author: string) => {
+    if (/opentex|publik/i.test(author)) return '';
+    const name = author.trim().toLowerCase();
+    if (!name) return '';
+    if (!evidenceLc) return full;
+    return evidenceLc.includes(name) ? full : '';
+  });
+  if (!/\\title\s*\{/.test(out)) {
+    out = out.replace(/\\date\s*\{[^{}]*\}/g, '');
+    out = out.replace(/\\maketitle\b/g, '');
+  }
+  return out.replace(/\n{3,}/g, '\n\n');
+}
+
 function fallbackConvertToLatex(
   payload: Extract<PublikActionPayload, { action: 'convertToLatex' }>
 ): string {
-  const { fileName, mimeType, model, promptHint, fileDataUrl } = payload;
+  const { fileName, fileDataUrl } = payload;
   const settings: ConversionSettings = {
     ...DEFAULT_CONVERSION_SETTINGS,
     ...(payload.settings || {}),
   };
 
-  // If plain text/LaTeX file was uploaded, preserve and normalize it
   const decodedText = tryDecodeTextDataUrl(fileDataUrl);
-  if (decodedText && decodedText.trim()) {
-    if (decodedText.includes('\\begin{document}')) return decodedText.trim();
+  if (decodedText && decodedText.trim() && decodedText.includes('\\begin{document}')) {
+    return decodedText.trim();
   }
 
   const pdfText = extractPdfReadableText(fileDataUrl);
-  const hint = `${fileName} ${promptHint || ''} ${pdfText || ''} ${mimeType}`.toLowerCase();
-  const baseTitle = fileName
-    .replace(/\.[^.]+$/, '')
-    .replace(/[_-]+/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  const sourceBody = (decodedText?.trim() || pdfText || '').trim();
 
   const { docClass, opt } = fontSizeOption(settings.fontSize);
   const geom = marginToGeometry(settings.margin);
   const { pkg: spacePkg, cmd: spaceCmd } = spacingCommand(settings.lineSpacing);
-  const eqEnv = settings.numbering ? 'equation' : 'equation*';
-  const secCmd = (label: string, title: string) =>
-    settings.headings === 'emphasis'
-      ? `\\textbf{${title}}`
-      : `\\${label}${settings.numbering ? '' : '*'}{${title}}`;
+  const packages = ['amsmath', 'amssymb', 'amsthm', ...(settings.colours ? ['xcolor'] : [])];
 
-  let topicTitle = baseTitle || 'Transcribed Mathematical Notes';
-  let sections: string[] = [];
-
-  if (hint.includes('eigen') || hint.includes('matrix') || hint.includes('linear')) {
-    topicTitle = 'Eigenvalues, Eigenvectors & Spectral Decomposition';
-    sections = [
-      `${secCmd('section', 'Characteristic Equation & Eigenpairs')}`,
-      `Let $A \\in \\mathbb{R}^{n \\times n}$ be a square matrix. A scalar $\\lambda \\in \\mathbb{C}$ is an \\textbf{eigenvalue} of $A$ with corresponding nonzero eigenvector $\\mathbf{v} \\in \\mathbb{C}^n$ if:`,
-      `\\begin{${eqEnv}}\nA\\mathbf{v} = \\lambda\\mathbf{v} \\quad \\Longleftrightarrow \\quad (A - \\lambda I_n)\\mathbf{v} = \\mathbf{0}\n\\end{${eqEnv}}`,
-      `Non-trivial solutions exist if and only if the characteristic polynomial vanishes: $p(\\lambda) = \\det(A - \\lambda I_n) = 0$.`,
-      `${secCmd('subsection', 'Spectral Theorem')}`,
-      `\\begin{theorem}[Real Symmetric Matrices]\nIf $A = A^T \\in \\mathbb{R}^{n \\times n}$, then all eigenvalues of $A$ are real, eigenvectors from distinct eigenspaces are orthogonal, and $A = Q \\Lambda Q^T$ for an orthogonal matrix $Q$ and diagonal $\\Lambda$.\n\\end{theorem}`,
-    ];
-  } else if (hint.includes('stokes') || hint.includes('vector') || hint.includes('curl') || hint.includes('flux')) {
-    topicTitle = "Stokes' Theorem & Vector Calculus";
-    sections = [
-      `${secCmd('section', 'Statement of Stokes\u2019 Theorem')}`,
-      `Let $\\Sigma \\subset \\mathbb{R}^3$ be an oriented smooth surface with positively oriented piecewise-smooth boundary $\\partial \\Sigma$, and let $\\mathbf{F} = (P, Q, R)$ be a $C^1$ vector field.`,
-      `\\begin{${eqEnv}}\n\\iint_{\\Sigma} (\\nabla \\times \\mathbf{F}) \\cdot d\\mathbf{S} = \\oint_{\\partial\\Sigma} \\mathbf{F} \\cdot d\\mathbf{r}\n\\end{${eqEnv}}`,
-      `${secCmd('subsection', 'Special Case (2D)')}`,
-      `When $\\Sigma$ lies in the $xy$-plane, Stokes' Theorem reduces to Green's Theorem; in 3D the curl is:`,
-      `\\[\n\\nabla \\times \\mathbf{F} = \\left(\\frac{\\partial R}{\\partial y} - \\frac{\\partial Q}{\\partial z},\\; \\frac{\\partial P}{\\partial z} - \\frac{\\partial R}{\\partial x},\\; \\frac{\\partial Q}{\\partial x} - \\frac{\\partial P}{\\partial y}\\right).\n\\]`,
-    ];
-  } else if (hint.includes('limit') || hint.includes('epsilon') || hint.includes('squeeze')) {
-    topicTitle = 'Limits & Continuity (Lecture 01)';
-    sections = [
-      `${secCmd('section', 'Epsilon-Delta Definition of a Limit')}`,
-      `We say $\\displaystyle\\lim_{x \\to a} f(x) = L$ if and only if for every $\\varepsilon > 0$ there exists $\\delta > 0$ such that:`,
-      `\\begin{${eqEnv}}\n0 < |x - a| < \\delta \\implies |f(x) - L| < \\varepsilon.\n\\end{${eqEnv}}`,
-      `${secCmd('subsection', 'Squeeze Theorem')}`,
-      `\\begin{theorem}[Squeeze Theorem]\nIf $g(x) \\le f(x) \\le h(x)$ near $a$ and $\\lim_{x \\to a} g(x) = \\lim_{x \\to a} h(x) = L$, then $\\lim_{x \\to a} f(x) = L$.\n\\end{theorem}`,
-    ];
-  } else if (hint.includes('integral') || hint.includes('ftc') || hint.includes('calculus') || hint.includes('derivative')) {
-    topicTitle = 'Integration & The Fundamental Theorem of Calculus';
-    sections = [
-      `${secCmd('section', 'Definite Integrals and Antiderivatives')}`,
-      `Suppose $f : [a, b] \\to \\mathbb{R}$ is continuous on the closed interval $[a, b]$. Define the accumulation function:`,
-      `\\begin{${eqEnv}}\nF(x) = \\int_{a}^{x} f(t)\\,dt, \\qquad x \\in [a, b].\n\\end{${eqEnv}}`,
-      `\\begin{theorem}[Fundamental Theorem of Calculus]\n$F$ is differentiable on $(a, b)$ with $F'(x) = f(x)$, and for any antiderivative $G$ of $f$:`,
-      `\\begin{${eqEnv}}\n\\int_{a}^{b} f(x)\\,dx = G(b) - G(a).\n\\end{${eqEnv}}\n\\end{theorem}`,
-    ];
-  } else if (hint.includes('sketch') || hint.includes('draw') || hint.includes('handwriting')) {
-    topicTitle = 'Handwritten Derivation & Sketch Notes';
-    sections = [
-      `${secCmd('section', 'Recognized Equations & Derivation')}`,
-      `From the handwritten sketch (${fileName}), we transcribe the mathematical expression:`,
-      `\\begin{${eqEnv}}\n\\int_{0}^{\\infty} e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}, \\qquad \\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}.\n\\end{${eqEnv}}`,
-      `Applying substitution $u = x^2$ in polar coordinates yields $I^2 = \\int_0^{\\pi/2} \\int_0^{\\infty} r e^{-r^2}\\,dr\\,d\\theta = \\frac{\\pi}{4}$, hence $I = \\frac{\\sqrt{\\pi}}{2}$.`,
-    ];
-  } else if (pdfText) {
-    topicTitle = baseTitle || 'Transcribed PDF Document';
-    sections = [
-      `${secCmd('section', 'Extracted Document Content')}`,
-      pdfText,
-    ];
-  } else {
-    topicTitle = baseTitle || 'Transcribed Mathematical Notes';
-    sections = [
-      `${secCmd('section', 'Transcribed Notes')}`,
-      `% Local fallback used (configure a Publik API key in Settings for full vision/PDF OCR on "${fileName}").`,
-      `We say $\\displaystyle\\lim_{x \\to a} f(x) = L$ if for every $\\varepsilon > 0$ there exists $\\delta > 0$ such that whenever $0 < |x - a| < \\delta$, we have $|f(x) - L| < \\varepsilon$.`,
-      `\\begin{${eqEnv}}\n0 < |x - a| < \\delta \\implies |f(x) - L| < \\varepsilon.\n\\end{${eqEnv}}`,
-    ];
-  }
-
-  if (settings.contextualText === 'enhanced') {
-    sections.push(
-      `${secCmd('subsection', 'Contextual Summary')}\nThis transcription was normalized using Publik ${model === 'turbo' ? 'Turbo' : 'Professional'} mode with enhanced mathematical exposition.`
-    );
-  }
-
-  if (settings.diagrams === 'draw' && (hint.includes('sketch') || hint.includes('stokes'))) {
-    sections.push(
-      `\\begin{tikzpicture}\n\\draw[->] (-2,0) -- (2,0) node[right] {$x$};\n\\draw[->] (0,-0.5) -- (0,2.5) node[above] {$y$};\n\\draw[blue,thick] (-1.5,1.6) -- (0,0.4) -- (1.5,1.6);\n\\end{tikzpicture}`
-    );
-  } else if (settings.diagrams === 'placeholder') {
-    sections.push(`% [Diagram placeholder preserved from ${fileName}]`);
-  }
-
-  if (settings.annotations === 'keep') {
-    sections.push(`% Margin annotation preserved: verify boundary conditions at endpoints.`);
-  }
-  if (settings.crossedOut === 'keep') {
-    sections.push(`% Draft note: \\sout{initial estimate omitted after simplification}`);
-  }
-
-  const packages = [
-    'amsmath',
-    'amssymb',
-    'amsthm',
-    ...(settings.colours ? ['xcolor'] : []),
-    ...(settings.diagrams === 'draw' ? ['tikz'] : []),
-    ...(settings.crossedOut === 'keep' ? ['ulem'] : []),
-  ];
-
-  const lines: string[] = [
+  const lines = [
     `\\documentclass[${opt}]{${docClass}}`,
     `\\usepackage[utf8]{inputenc}`,
     `\\usepackage{${packages.join(', ')}}`,
     `\\usepackage[margin=${geom}]{geometry}`,
     spacePkg,
     spaceCmd,
-    ...(settings.language !== 'automatic' ? [`% Target language: ${settings.language}`] : []),
-    `% Style preset: ${settings.preset} (${settings.latexStyle})`,
     '',
-    '\\newtheorem{theorem}{Theorem}',
-    '\\newtheorem{definition}{Definition}',
+    '\\begin{document}',
     '',
+    sourceBody ||
+      `% No text could be read from "${fileName}". OpenTEX did not add a title or equations that were not in the source.`,
+    '',
+    '\\end{document}',
   ];
 
-  if (settings.title) {
-    lines.push(`\\title{${topicTitle}}`, `\\author{OpenTEX · Publik AI}`, `\\date{}`);
-  }
-
-  lines.push('', '\\begin{document}');
-  if (settings.title) lines.push('\\maketitle');
-  if (settings.toc) lines.push('\\tableofcontents');
-  lines.push('', ...sections, '', '\\end{document}');
-
-  return lines.join('\n');
+  return stripInventedScaffolding(lines.join('\n'), sourceBody);
 }
 
 function fallbackFormatLatex(
@@ -743,7 +680,7 @@ function fallbackConvertFormat(
 ): string {
   const { body } = extractBody(payload.latex);
   const titleMatch = /\\title\{([^}]*)\}/.exec(payload.latex);
-  const title = titleMatch ? titleMatch[1] : 'OpenTEX Document';
+  const title = titleMatch ? titleMatch[1].trim() : '';
 
   if (payload.format === 'typst') {
     let typ = body
@@ -763,7 +700,8 @@ function fallbackConvertFormat(
       .replace(/\\\[([\s\S]*?)\\\]/g, (_, m) => `\n$ ${latexMathToTypst(m)} $\n`)
       .replace(/\$([^$]+)\$/g, (_, m) => `$${latexMathToTypst(m)}$`);
     typ = typ.replace(/\\begin\{[^}]+\}(?:\[[^\]]*\])?/g, '').replace(/\\end\{[^}]+\}/g, '');
-    return `#set page(margin: 2.5cm)\n#set text(size: 11pt)\n\n= ${title}\n\n${typ.trim()}`;
+    const heading = title ? `= ${title}\n\n` : '';
+    return `#set page(margin: 2.5cm)\n#set text(size: 11pt)\n\n${heading}${typ.trim()}`;
   }
 
   // Markdown / DOCX / ODT share clean Markdown-structured output
@@ -790,8 +728,8 @@ function fallbackConvertFormat(
     .replace(/\\end\{(?:theorem|lemma|definition|proof)\}/g, '')
     .replace(/\\label\{[^}]*\}/g, '');
 
-  md = `# ${title}\n\n${md.replace(/\n{3,}/g, '\n\n').trim()}`;
-  return md;
+  const bodyOut = md.replace(/\n{3,}/g, '\n\n').trim();
+  return title ? `# ${title}\n\n${bodyOut}` : bodyOut;
 }
 
 function fallbackSuggestEdit(
@@ -1107,7 +1045,9 @@ function runSmartFallback(
 
 function buildPromptMessages(payload: PublikActionPayload): Array<{ role: 'system' | 'user'; content: unknown }> {
   const systemBase =
-    'You are OpenTEX powered by Publik AI. Output clean, accurate LaTeX or requested target format without markdown code fences or extra commentary unless JSON is requested.';
+    payload.action === 'convertToLatex'
+      ? 'You are OpenTEX. Transcribe the source into compilable LaTeX and nothing else. Include only content that is visible in the source. Never invent a title, author, heading, sentence, example, or equation. Do not add \\title, \\author, \\date, or \\maketitle unless that text is visibly written in the source. Never use a placeholder title such as "Mathematical Expressions".'
+      : 'You are OpenTEX powered by Publik AI. Output clean, accurate LaTeX or requested target format without markdown code fences or extra commentary unless JSON is requested.';
 
   switch (payload.action) {
     case 'convertToLatex': {
@@ -1116,8 +1056,14 @@ function buildPromptMessages(payload: PublikActionPayload): Array<{ role: 'syste
         ...(payload.settings || {}),
       };
       const pdfText = extractPdfReadableText(payload.fileDataUrl);
-      const prompt = `Convert this ${payload.mimeType || 'document'} ("${payload.fileName}") into clean compilable LaTeX.
-Settings: preset=${s.preset}, style=${s.latexStyle}, title=${s.title}, headings=${s.headings}, toc=${s.toc}, language=${s.language}, numbering=${s.numbering}, diagrams=${s.diagrams}, equationLayout=${s.equationLayout}, textStyle=${s.textStyle}.
+      const titleRule = s.title
+        ? 'If a title is visibly written in the source, format it with \\title and \\maketitle. If the source has no title, omit \\title, \\author, \\date, and \\maketitle.'
+        : 'Do not emit \\title, \\author, \\date, or \\maketitle.';
+      const prompt = `Transcribe this ${payload.mimeType || 'document'} ("${payload.fileName}") into compilable LaTeX.
+Transcribe ONLY what is visible. Do not add titles, authors, headings, prose, or equations that are not in the source.
+An image that contains only equations must not contain \\title or \\maketitle.
+${titleRule}
+Settings: preset=${s.preset}, style=${s.latexStyle}, headings=${s.headings}, toc=${s.toc}, language=${s.language}, numbering=${s.numbering}, diagrams=${s.diagrams}, equationLayout=${s.equationLayout}, textStyle=${s.textStyle}.
 ${payload.promptHint ? `Hint: ${payload.promptHint}` : ''}
 ${pdfText ? `Extracted document text:\n${pdfText}` : ''}
 Return only valid LaTeX.`;
@@ -1239,7 +1185,7 @@ export async function executePublikAction(
       body: JSON.stringify({
         model: selectedModel,
         messages,
-        temperature: payload.action === 'test' ? 0 : 0.2,
+        temperature: payload.action === 'test' || payload.action === 'convertToLatex' ? 0 : 0.2,
         ...(payload.action === 'test' ? { max_tokens: 16 } : {}),
       }),
       signal: AbortSignal.timeout(30_000),
@@ -1317,8 +1263,13 @@ export async function executePublikAction(
       );
     }
 
+    const faithful =
+      payload.action === 'convertToLatex'
+        ? stripInventedScaffolding(cleaned, sourceEvidence(payload))
+        : cleaned;
+
     return {
-      result: cleaned,
+      result: faithful,
       provider: 'publik',
       model: actualModel,
     };
@@ -1343,11 +1294,25 @@ export async function runPublikAction<T = string>(
     config: { ...storedConfig, ...payload.config },
   };
 
-  const res = await fetch('/api/publik', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(mergedPayload),
-  });
+  const body = JSON.stringify(mergedPayload);
+  if (body.length > VERCEL_BODY_LIMIT_BYTES) {
+    throw new Error(UPLOAD_TOO_LARGE_MESSAGE);
+  }
+
+  let res: Response;
+  try {
+    res = await fetch('/api/publik', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      signal: AbortSignal.timeout(45_000),
+    });
+  } catch (err) {
+    if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      throw new Error('The conversion took too long and was stopped. Try again with a smaller file.');
+    }
+    throw err;
+  }
 
   if (res.status === 402) {
     const errJson = (await res.json().catch(() => ({}))) as {
@@ -1366,8 +1331,15 @@ export async function runPublikAction<T = string>(
     throw new Error(msg);
   }
 
+  if (res.status === 413) {
+    throw new Error(UPLOAD_TOO_LARGE_MESSAGE);
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => '');
+    if (/request entity too large|payload too large|body exceeded|FUNCTION_PAYLOAD_TOO_LARGE/i.test(text)) {
+      throw new Error(UPLOAD_TOO_LARGE_MESSAGE);
+    }
     throw new Error(text || `Publik API request failed (${res.status})`);
   }
 

@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import ConversionPickerModal from '@/components/app/ConversionPickerModal';
 import LatexEditorPane from '@/components/app/LatexEditorPane';
-import { downloadFile, openInOverleaf, printCompiledPdf } from '@/lib/exporters';
+import { copyTextToClipboard, downloadCompiledPdf, downloadFile, openInOverleaf, showExportNotice } from '@/lib/exporters';
 import { parseBeamerSlides } from '@/lib/latex-renderer';
 import { generateSlides } from '@/lib/publik';
 import { getAppPreferences, getConversions, saveConversion } from '@/lib/storage';
@@ -276,12 +276,14 @@ export default function SlidesPage() {
 
   const handleCopy = async () => {
     if (!beamerLatex) return;
-    try {
-      await navigator.clipboard.writeText(beamerLatex);
+    const ok = await copyTextToClipboard(beamerLatex);
+    if (ok) {
       setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      // Ignore clipboard failure
+      showExportNotice('Copied to clipboard.');
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      setErrorMsg('Could not copy to the clipboard.');
+      showExportNotice('Could not copy to the clipboard.', 'err');
     }
   };
 
@@ -297,8 +299,8 @@ export default function SlidesPage() {
           </section>`
       )
       .join('\n');
-    if (!printCompiledPdf(html, deckTitle)) {
-      setErrorMsg('Pop-up blocked. Please allow pop-ups in your browser to save or print the PDF.');
+    if (!downloadCompiledPdf(html, deckTitle)) {
+      setErrorMsg('Could not create the PDF.');
     }
   };
 

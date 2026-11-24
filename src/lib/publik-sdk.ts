@@ -4,6 +4,7 @@
 //   2. shows Sign in with publik until GET /api/v1/wallet says "claimed" (no other way past it);
 //   3. when USES_AI: uses the publik account for AI, with no pay screen (setChoice() changes it);
 //   4. starts usage counting: app_opened now, active_session every 30 minutes (POST /api/v1/telemetry).
+import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, writeSync } from "node:fs";
 import { arch, homedir, hostname, platform, tmpdir } from "node:os";
@@ -57,6 +58,7 @@ export type Provider =
   | { kind: "own" | "publik"; baseURL: string; apiKey: string }
   | { kind: "needs_own_key" };
 
+/** Public app identifier (`pat_`), not a visitor secret. `PUBLIK_APP_TOKEN` overrides the committed file. */
 export function appToken(): string {
   const env = process.env.PUBLIK_APP_TOKEN?.trim();
   if (env) return env;
@@ -97,25 +99,63 @@ export const credentialPath = () => join(publikDir(), "apps", `${APP_SLUG}.json`
 
 let memCredential: PublikCredential | null = null;
 
+type CredentialBox = { current: PublikCredential | null };
+const requestCredential = new AsyncLocalStorage<CredentialBox>();
+
+function validCredential(c: PublikCredential | null | undefined): PublikCredential | null {
+  if (!c || typeof c.key !== "string" || !c.key.startsWith("pk_")) return null;
+  return c;
+}
+
+/** Warm Vercel/Lambda instances are shared. A module or /tmp credential would leak across visitors. */
+function sharedCredentialStoreDisabled(): boolean {
+  return process.env.VERCEL === "1" || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+}
+
+/** Run `fn` with a credential that no other request can see. `null` means this visitor has no key yet. */
+export function withRequestCredential<T>(initial: PublikCredential | null, fn: () => T): T {
+  return requestCredential.run({ current: validCredential(initial) }, fn);
+}
+
+export function credentialFromCookieJson(raw: string | undefined | null): PublikCredential | null {
+  if (!raw) return null;
+  try {
+    return validCredential(JSON.parse(raw) as PublikCredential);
+  } catch {
+    return null;
+  }
+}
+
 export function readCredential(): PublikCredential | null {
+  const box = requestCredential.getStore();
+  if (box) return validCredential(box.current);
+  if (sharedCredentialStoreDisabled()) return null;
   try {
     const c = JSON.parse(readFileSync(credentialPath(), "utf8")) as PublikCredential;
-    if (typeof c.key === "string" && c.key.startsWith("pk_")) return (memCredential = c);
+    const valid = validCredential(c);
+    if (valid) return (memCredential = valid);
     return null;
   } catch {
-    return memCredential;
+    return validCredential(memCredential);
   }
 }
 
 export function writeCredential(c: PublikCredential | null): void {
-  memCredential = c && typeof c.key === "string" && c.key.startsWith("pk_") ? c : null;
+  const next = validCredential(c);
+  const box = requestCredential.getStore();
+  if (box) {
+    box.current = next;
+    return;
+  }
+  if (sharedCredentialStoreDisabled()) return;
+  memCredential = next;
   try {
     const file = credentialPath();
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, JSON.stringify(c ?? {}, null, 2), { mode: 0o600 });
+    writeFileSync(file, JSON.stringify(next ?? {}, null, 2), { mode: 0o600 });
     chmodSync(file, 0o600);
   } catch {
-    // Serverless/read-only filesystems or Windows chmod may fail; memCredential keeps the session alive
+    // Unwritable home directory: memCredential keeps this single-user process alive
   }
 }
 
@@ -125,23 +165,29 @@ export function setChoice(choice: Choice | null): void {
   if (c) writeCredential({ ...c, choice });
 }
 
-/** The key this app uses: the stored choice decides. PUBLIK_API_KEY / PUBLIK_API_BASE_URL in the environment override (development). */
+/** Settings key wins. PUBLIK_API_KEY is only the fallback when the visitor has not supplied a key. */
 export function resolveProvider(userKey?: { baseURL: string; apiKey: string } | null): Provider {
-  if (process.env.PUBLIK_API_KEY) {
+  const supplied = userKey?.apiKey?.trim();
+  if (supplied) {
+    const base = (userKey?.baseURL || process.env.PUBLIK_API_BASE_URL || DEFAULT_BASE_URL)
+      .trim()
+      .replace(/\/+$/, "");
+    return { kind: "own", baseURL: base, apiKey: supplied };
+  }
+  const envKey = process.env.PUBLIK_API_KEY?.trim();
+  if (envKey) {
     return {
       kind: "publik",
-      baseURL: process.env.PUBLIK_API_BASE_URL ?? DEFAULT_BASE_URL,
-      apiKey: process.env.PUBLIK_API_KEY,
+      baseURL: (process.env.PUBLIK_API_BASE_URL || DEFAULT_BASE_URL).trim().replace(/\/+$/, ""),
+      apiKey: envKey,
     };
   }
   const c = readCredential();
-  if (c?.choice === "own_key") {
-    return userKey?.apiKey ? { kind: "own", ...userKey } : { kind: "needs_own_key" };
-  }
+  if (c?.choice === "own_key") return { kind: "needs_own_key" };
   if (c && (c.choice === "publik" || c.choice == null)) {
     return { kind: "publik", baseURL: c.base_url || DEFAULT_BASE_URL, apiKey: c.key };
   }
-  return userKey?.apiKey ? { kind: "own", ...userKey } : { kind: "needs_own_key" };
+  return { kind: "needs_own_key" };
 }
 
 /** POST /api/v1/installs: this computer's publik key. Throws a readable message. */
@@ -460,7 +506,10 @@ async function sendEvent(event: "app_opened" | "active_session"): Promise<void> 
   try {
     if (!OS) return;
     if (usageOff()) return say("off (opt-out)");
-    const key = process.env.PUBLIK_API_KEY || readCredential()?.key;
+    const box = requestCredential.getStore();
+    const key = process.env.PUBLIK_API_KEY?.trim()
+      || (box ? box.current?.key : undefined)
+      || (sharedCredentialStoreDisabled() ? undefined : readCredential()?.key);
     const body = {
       v: 1,
       app: APP_SLUG,
@@ -489,7 +538,11 @@ async function sendEvent(event: "app_opened" | "active_session"): Promise<void> 
 export function startTelemetry(): void {
   if (timer) return;
   const s = Number(process.env.PUBLIK_TELEMETRY_INTERVAL_SECONDS); // tests only
-  timer = setInterval(() => void sendEvent("active_session"), (s >= 1 && s <= 86_400 ? s : 1_800) * 1000);
+  timer = setInterval(() => {
+    requestCredential.exit(() => {
+      void sendEvent("active_session");
+    });
+  }, (s >= 1 && s <= 86_400 ? s : 1_800) * 1000);
   timer.unref?.();
   void sendEvent("app_opened");
 }

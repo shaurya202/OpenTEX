@@ -7,11 +7,13 @@ import {
   DEFAULT_BASE_URL,
   gateScreen,
   provision,
+  credentialFromCookieJson,
   readCredential,
   readWallet,
   setChoice,
   startTelemetry,
   USES_AI,
+  withRequestCredential,
   writeCredential,
   type Choice,
   type PublikCredential,
@@ -37,17 +39,11 @@ function sanitizeWalletSummary(w: Wallet | null) {
 
 const CRED_COOKIE = 'publik_cred';
 
-async function syncCredentialFromCookie() {
-  if (readCredential()) return;
+async function credentialFromRequestCookie(): Promise<PublikCredential | null> {
   try {
-    const raw = (await cookies()).get(CRED_COOKIE)?.value;
-    if (!raw) return;
-    const parsed = JSON.parse(raw) as PublikCredential;
-    if (typeof parsed?.key === 'string' && parsed.key.startsWith('pk_')) {
-      writeCredential(parsed);
-    }
+    return credentialFromCookieJson((await cookies()).get(CRED_COOKIE)?.value);
   } catch {
-    // Ignore malformed cookie
+    return null;
   }
 }
 
@@ -59,6 +55,7 @@ async function persistCredentialCookie() {
       jar.set(CRED_COOKIE, JSON.stringify(cred), {
         httpOnly: true,
         sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
         path: '/',
         maxAge: 365 * 24 * 60 * 60,
       });
@@ -71,7 +68,6 @@ async function persistCredentialCookie() {
 }
 
 async function computeStatus() {
-  await syncCredentialFromCookie();
   const token = appToken();
   const hasAppToken = token.startsWith('pat_');
   const hasEnvKey = Boolean(process.env.PUBLIK_API_KEY?.trim());
@@ -189,9 +185,12 @@ async function computeStatus() {
 
 export async function GET() {
   try {
-    const status = await computeStatus();
-    await persistCredentialCookie();
-    return NextResponse.json(status);
+    const initial = await credentialFromRequestCookie();
+    return await withRequestCredential(initial, async () => {
+      const status = await computeStatus();
+      await persistCredentialCookie();
+      return NextResponse.json(status);
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Failed to check publik status.' },
@@ -202,7 +201,8 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    await syncCredentialFromCookie();
+    const initial = await credentialFromRequestCookie();
+    return await withRequestCredential(initial, async () => {
     const body = (await req.json().catch(() => ({}))) as {
       action?: string;
       choice?: Choice | null;
@@ -233,6 +233,7 @@ export async function POST(req: Request) {
     const status = await computeStatus();
     await persistCredentialCookie();
     return NextResponse.json(status);
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Failed to update publik status.' },

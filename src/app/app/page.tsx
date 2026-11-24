@@ -26,6 +26,7 @@ import ConversionSettingsModal from '@/components/app/ConversionSettingsModal';
 import LatexEditorPane from '@/components/app/LatexEditorPane';
 import OnboardingModal from '@/components/app/OnboardingModal';
 import { convertToLatex } from '@/lib/publik';
+import { MAX_UPLOAD_FILE_BYTES, UPLOAD_TOO_LARGE_MESSAGE } from '@/lib/upload-limit';
 import {
   getAppPreferences,
   getFolders,
@@ -44,7 +45,7 @@ import {
   PRESET_LABELS,
 } from '@/types/mathwrite';
 
-const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50MB
+const MAX_FILE_BYTES = MAX_UPLOAD_FILE_BYTES;
 
 interface SampleNote {
   id: string;
@@ -348,7 +349,7 @@ export default function ConvertWorkspacePage() {
   const processSelectedFile = (file: File) => {
     setErrorMsg(null);
     if (file.size > MAX_FILE_BYTES) {
-      setErrorMsg('File exceeds the 50 MB limit. Please upload a smaller image or PDF.');
+      setErrorMsg(UPLOAD_TOO_LARGE_MESSAGE);
       return;
     }
     const validTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf'];
@@ -518,6 +519,11 @@ export default function ConvertWorkspacePage() {
       setIsSketchFullscreen(false);
     } else if (!activeFileName || !activeDataUrl) {
       setErrorMsg('Please upload an image/PDF or choose one of the sample handwritten notes.');
+      return;
+    }
+
+    if (activeDataUrl && activeDataUrl.length > 4_200_000) {
+      setErrorMsg(UPLOAD_TOO_LARGE_MESSAGE);
       return;
     }
 
