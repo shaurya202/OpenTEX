@@ -287,7 +287,7 @@ export default function SlidesPage() {
     }
   };
 
-  const handlePrintDeck = () => {
+  const handlePrintDeck = async () => {
     if (slides.length === 0) return;
     const html = slides
       .map(
@@ -299,9 +299,8 @@ export default function SlidesPage() {
           </section>`
       )
       .join('\n');
-    if (!downloadCompiledPdf(html, deckTitle)) {
-      setErrorMsg('Could not create the PDF.');
-    }
+    const ok = await downloadCompiledPdf(html, deckTitle);
+    if (!ok) setErrorMsg('Could not create the PDF.');
   };
 
   const paletteStyle = PALETTE_STYLES[colorPalette];

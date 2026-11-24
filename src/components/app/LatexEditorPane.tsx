@@ -162,6 +162,7 @@ export default function LatexEditorPane({
   const [isDragging, setIsDragging] = useState(false);
   const [copied, setCopied] = useState(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   // Selection & inline AI suggestions state
   const [selectionRange, setSelectionRange] = useState<{ start: number; end: number }>({
@@ -311,9 +312,16 @@ export default function LatexEditorPane({
     }
   };
 
-  const handleDownloadPdf = () => {
-    const ok = downloadCompiledPdf(renderedHtml, title);
-    setActionNotice(ok ? 'PDF downloaded.' : 'Could not create the PDF.');
+  const handleDownloadPdf = async () => {
+    if (pdfBusy) return;
+    setPdfBusy(true);
+    setActionNotice('Preparing PDF…');
+    try {
+      const ok = await downloadCompiledPdf(renderedHtml, title);
+      setActionNotice(ok ? 'PDF downloaded.' : 'Could not create the PDF.');
+    } finally {
+      setPdfBusy(false);
+    }
   };
 
   const handleOpenOverleaf = () => {
@@ -497,12 +505,12 @@ export default function LatexEditorPane({
 
           <button
             type="button"
-            onClick={handleDownloadPdf}
-            disabled={!hasContent}
+            onClick={() => void handleDownloadPdf()}
+            disabled={!hasContent || pdfBusy}
             className="inline-flex items-center gap-1.5 rounded-lg border border-[#D2D2D7] bg-white px-2.5 py-1.5 text-xs font-medium text-[#1D1D1F] hover:bg-[#F5F5F7] disabled:opacity-50 dark:border-[#3A3A3C] dark:bg-[#2C2C2E] dark:text-[#F5F5F7] dark:hover:bg-[#3A3A3C]"
           >
             <FileText className="h-3.5 w-3.5" />
-            <span>Download PDF</span>
+            <span>{pdfBusy ? 'Preparing PDF…' : 'Download PDF'}</span>
           </button>
 
           <button
