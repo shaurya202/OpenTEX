@@ -426,170 +426,135 @@ export function downloadLatexZip(conversions: ConversionItem[]): void {
   downloadFile(buildZipBlob(entries), 'opentex-conversions.zip', 'application/zip');
 }
 
-const PDF_FOLDS: Array<[string, string]> = [
-  ['≤', '<='],
-  ['≥', '>='],
-  ['≠', '!='],
-  ['≈', '~'],
-  ['→', '->'],
-  ['←', '<-'],
-  ['↔', '<->'],
-  ['∞', 'infinity'],
-  ['α', 'alpha'],
-  ['β', 'beta'],
-  ['γ', 'gamma'],
-  ['δ', 'delta'],
-  ['ε', 'epsilon'],
-  ['θ', 'theta'],
-  ['λ', 'lambda'],
-  ['μ', 'mu'],
-  ['π', 'pi'],
-  ['σ', 'sigma'],
-  ['φ', 'phi'],
-  ['ω', 'omega'],
-  ['∫', 'integral'],
-  ['∑', 'sum'],
-  ['√', 'sqrt'],
-  ['·', '*'],
-  ['×', 'x'],
-  ['−', '-'],
-  ['–', '-'],
-  ['—', '-'],
-  ['“', '"'],
-  ['”', '"'],
-  ['‘', "'"],
-  ['’', "'"],
-];
+const PDF_CONTENT_WIDTH = 700;
+/** CSS pixels of preview content that fit on one US Letter page with margins. */
+const PDF_PAGE_BUDGET = 960;
 
-function asciiFold(text: string): string {
-  let folded = text;
-  for (const [from, to] of PDF_FOLDS) folded = folded.split(from).join(to);
-  let out = '';
-  for (const ch of folded) {
-    const code = ch.codePointAt(0) ?? 63;
-    if (code === 10 || code === 13) out += '\n';
-    else out += code >= 32 && code <= 126 ? ch : '?';
-  }
-  return out;
-}
-
-function pdfEscape(text: string): string {
-  return text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-}
-
-function htmlToPlainText(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<annotation[\s\S]*?<\/annotation>/gi, '')
-    .replace(/<math[\s\S]*?<\/math>/gi, '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|h1|h2|h3|h4|li|tr|section|article)>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => {
-      const code = Number(n);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : '';
-    })
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-function wrapPdfLines(text: string, width = 92): string[] {
-  const lines: string[] = [];
-  for (const para of text.split(/\n/)) {
-    const words = para.split(/\s+/).filter(Boolean);
-    if (words.length === 0) {
-      lines.push('');
-      continue;
+function collectPdfBlocks(sheet: HTMLElement): HTMLElement[] {
+  const blocks: HTMLElement[] = [];
+  for (const child of Array.from(sheet.children)) {
+    if (!(child instanceof HTMLElement)) continue;
+    if (child.tagName === 'ARTICLE') {
+      const inner = Array.from(child.children).filter((node): node is HTMLElement => node instanceof HTMLElement);
+      blocks.push(...(inner.length ? inner : [child]));
+    } else {
+      blocks.push(child);
     }
-    let line = '';
-    for (const word of words) {
-      const next = line ? `${line} ${word}` : word;
-      if (next.length > width && line) {
-        lines.push(line);
-        line = word.length > width ? word.slice(0, width) : word;
-      } else {
-        line = next.length > width ? next.slice(0, width) : next;
-      }
-    }
-    if (line) lines.push(line);
   }
-  return lines;
+  return blocks;
 }
 
-function encodePdf(lines: string[]): Uint8Array {
-  const pageSize = 46;
-  const chunks: string[][] = [];
-  const source = lines.length > 0 ? lines : [''];
-  for (let i = 0; i < source.length; i += pageSize) chunks.push(source.slice(i, i + pageSize));
-
-  const fontId = 3;
-  const pageIds: number[] = [];
-  const contentIds: number[] = [];
-  let nextId = 4;
-  for (let i = 0; i < chunks.length; i++) {
-    pageIds.push(nextId++);
-    contentIds.push(nextId++);
+function packPdfPages(blocks: HTMLElement[]): HTMLElement[][] {
+  const pages: HTMLElement[][] = [];
+  let current: HTMLElement[] = [];
+  let used = 0;
+  for (const block of blocks) {
+    const height = Math.max(24, Math.ceil(block.getBoundingClientRect().height || block.scrollHeight));
+    if (current.length > 0 && used + height > PDF_PAGE_BUDGET) {
+      pages.push(current);
+      current = [];
+      used = 0;
+    }
+    current.push(block);
+    used += height;
   }
+  if (current.length > 0) pages.push(current);
+  return pages.length > 0 ? pages : [[]];
+}
 
-  const objects = new Map<number, string>();
-  objects.set(1, '<< /Type /Catalog /Pages 2 0 R >>');
-  objects.set(
-    2,
-    `<< /Type /Pages /Kids [${pageIds.map((n) => `${n} 0 R`).join(' ')}] /Count ${pageIds.length} >>`
-  );
-  objects.set(3, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
-
-  chunks.forEach((chunk, index) => {
-    const commands = chunk
-      .map((line) => `(${pdfEscape(line)}) Tj\nT*`)
-      .join('\n');
-    const stream = `BT\n/F1 11 Tf\n54 760 Td\n14 TL\n${commands}\nET`;
-    objects.set(contentIds[index], `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
-    objects.set(
-      pageIds[index],
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contentIds[index]} 0 R /Resources << /Font << /F1 ${fontId} 0 R >> >> >>`
-    );
+async function paintElement(element: HTMLElement): Promise<HTMLCanvasElement> {
+  const html2canvas = (await import('html2canvas-pro')).default;
+  return html2canvas(element, {
+    backgroundColor: '#ffffff',
+    scale: 2,
+    useCORS: true,
+    logging: false,
+    width: PDF_CONTENT_WIDTH,
+    windowWidth: PDF_CONTENT_WIDTH,
   });
-
-  let pdf = '%PDF-1.4\n';
-  const offsets = [0];
-  const maxId = nextId - 1;
-  for (let n = 1; n <= maxId; n++) {
-    offsets[n] = pdf.length;
-    pdf += `${n} 0 obj\n${objects.get(n)}\nendobj\n`;
-  }
-  const xrefStart = pdf.length;
-  pdf += `xref\n0 ${maxId + 1}\n`;
-  pdf += '0000000000 65535 f \n';
-  for (let n = 1; n <= maxId; n++) {
-    pdf += `${String(offsets[n]).padStart(10, '0')} 00000 n \n`;
-  }
-  pdf += `trailer\n<< /Size ${maxId + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
-  return new TextEncoder().encode(pdf);
 }
 
-export function renderPdfBytes(title: string, renderedHtml: string): Uint8Array {
-  const plain = htmlToPlainText(renderedHtml);
-  const text = asciiFold([title || 'OpenTEX Document', '', plain || 'OpenTEX document'].join('\n'));
-  return encodePdf(wrapPdfLines(text));
+function addCanvasToPdf(
+  pdf: import('jspdf').jsPDF,
+  canvas: HTMLCanvasElement,
+  placeOnNewPage: boolean
+): void {
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 36;
+  const drawWidth = pageWidth - margin * 2;
+  const usableHeight = pageHeight - margin * 2;
+  const scale = drawWidth / canvas.width;
+  const sliceHeight = Math.max(1, Math.floor(usableHeight / scale));
+  let offset = 0;
+  let first = !placeOnNewPage;
+  while (offset < canvas.height) {
+    const height = Math.min(sliceHeight, canvas.height - offset);
+    const slice = document.createElement('canvas');
+    slice.width = canvas.width;
+    slice.height = height;
+    const ctx = slice.getContext('2d');
+    if (!ctx) break;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, slice.width, slice.height);
+    ctx.drawImage(canvas, 0, offset, canvas.width, height, 0, 0, canvas.width, height);
+    if (!first) pdf.addPage();
+    first = false;
+    pdf.addImage(slice.toDataURL('image/png'), 'PNG', margin, margin, drawWidth, height * scale);
+    offset += height;
+  }
 }
 
-export function downloadCompiledPdf(renderedHtml: string, title: string): boolean {
+/** Snapshot the KaTeX preview into a multi-page PDF. Runs in the browser only. */
+export async function buildTypesetPdfBlob(renderedHtml: string, title: string): Promise<Blob> {
+  const host = document.createElement('div');
+  host.setAttribute('aria-hidden', 'true');
+  host.style.cssText = [
+    'position:fixed',
+    `width:${PDF_CONTENT_WIDTH}px`,
+    'left:0',
+    'top:0',
+    'background:#ffffff',
+    'color:#111827',
+    'z-index:-1',
+    'pointer-events:none',
+  ].join(';');
+  const safeTitle = escapeXmlHtml(title || 'OpenTEX Document');
+  host.innerHTML = `<div class="pdf-sheet" style="box-sizing:border-box;width:${PDF_CONTENT_WIDTH}px;background:#ffffff;color:#111827;font-family:Georgia,'Times New Roman',serif;line-height:1.6;">
+    <h1 style="margin:0 0 18px;padding-bottom:10px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:22px;line-height:1.3;font-weight:700;color:#0f172a;">${safeTitle}</h1>
+    ${renderedHtml}
+  </div>`;
+  document.body.appendChild(host);
+  try {
+    if (document.fonts?.ready) await document.fonts.ready;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const sheet = host.querySelector('.pdf-sheet');
+    if (!(sheet instanceof HTMLElement)) throw new Error('Could not prepare the PDF preview.');
+    const pages = packPdfPages(collectPdfBlocks(sheet));
+    const { jsPDF } = await import('jspdf');
+    const pdf = new jsPDF({ unit: 'pt', format: 'letter', compress: true });
+    for (let index = 0; index < pages.length; index++) {
+      const pageHost = document.createElement('div');
+      pageHost.style.cssText = `box-sizing:border-box;width:${PDF_CONTENT_WIDTH}px;background:#ffffff;color:#111827;padding:4px 8px 12px;`;
+      for (const block of pages[index]) pageHost.appendChild(block);
+      host.appendChild(pageHost);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const canvas = await paintElement(pageHost);
+      addCanvasToPdf(pdf, canvas, index > 0);
+      pageHost.remove();
+    }
+    return pdf.output('blob');
+  } finally {
+    host.remove();
+  }
+}
+
+export async function downloadCompiledPdf(renderedHtml: string, title: string): Promise<boolean> {
   if (typeof document === 'undefined') return false;
   try {
-    const bytes = renderPdfBytes(title, renderedHtml);
-    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-    const blob = new Blob([buffer], { type: 'application/pdf' });
-    const filename = `${sanitizeFilename(title)}.pdf`;
-    const ok = downloadFile(blob, filename, 'application/pdf');
+    const blob = await buildTypesetPdfBlob(renderedHtml, title);
+    if (blob.size < 1500) throw new Error('PDF render was empty.');
+    const ok = downloadFile(blob, `${sanitizeFilename(title)}.pdf`, 'application/pdf');
     showExportNotice(ok ? 'PDF downloaded.' : 'Could not create the PDF.', ok ? 'ok' : 'err');
     return ok;
   } catch {

@@ -67,7 +67,7 @@ async function run() {
   const { renderLatexDocument, parseBeamerSlides } = loadTsModule('@/lib/latex-renderer.ts');
   const { executePublikAction, stripInventedScaffolding } = loadTsModule('@/lib/publik.ts');
   const { credentialPath, readCredential, writeCredential, resolveProvider, withRequestCredential } = loadTsModule('@/lib/publik-sdk.ts');
-  const { downloadConvertedDocument, openInOverleaf, printCompiledPdf, renderPdfBytes } = loadTsModule('@/lib/exporters.ts');
+  const { downloadConvertedDocument, openInOverleaf, printCompiledPdf } = loadTsModule('@/lib/exporters.ts');
   const { tokenizeLatexLine } = loadTsModule('@/components/app/LatexEditorPane.tsx');
 
   // 1. LaTeX syntax tokenizer
@@ -231,10 +231,6 @@ async function run() {
     assert.match(captured[2].type, /^text\/plain/);
     assert.doesNotMatch(captured[2].type, /markdown/);
     assert.equal(openInOverleaf('\\begin{document}x\\end{document}', 'Notes'), false);
-    const pdfBytes = Buffer.from(renderPdfBytes('Two equations', '<p>x^2 + y^2 = 1</p>'));
-    assert.equal(pdfBytes.slice(0, 5).toString('utf8'), '%PDF-');
-    assert.ok(pdfBytes.includes(Buffer.from('Two equations')));
-    assert.ok(pdfBytes.includes(Buffer.from('x^2 + y^2 = 1')));
   } finally {
     globalThis.document = origDoc;
     globalThis.URL = origUrl;
