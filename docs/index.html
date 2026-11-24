@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenTEX: Convert your notes to LaTeX in seconds</title>
+    <meta
+      name="description"
+      content="OpenTEX is a 100% free AI-powered workspace powered by Publik AI that converts handwritten math, physics, or engineering notes and PDFs to LaTeX in seconds."
+    />
+    <meta name="theme-color" content="#F5F5F7" />
+    <link rel="canonical" href="https://shaurya202.github.io/opentex/" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-bar">
+        <a class="brand" href="./">
+          <svg class="brand-mark" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+            <rect width="64" height="64" rx="14" fill="#1D1D1F" />
+            <path d="M16 17L27 47" stroke="#2997FF" stroke-width="6.5" stroke-linecap="round" />
+            <path d="M31 19H50M40.5 19V47" stroke="#FFFFFF" stroke-width="6.5" stroke-linecap="round" />
+          </svg>
+          <span>Open<span class="tex">TEX</span></span>
+        </a>
+
+        <nav class="nav-desktop" aria-label="Primary">
+          <a class="nav-link" href="#workflow">Workflow</a>
+          <a class="nav-link" href="#toolkit">Toolkit</a>
+          <a class="nav-link" href="#presentations">Slides</a>
+          <a class="nav-link" href="#mcp">MCP</a>
+          <a class="nav-link" href="#faq">FAQ</a>
+        </nav>
+
+        <div class="actions-desktop">
+          <a class="link-quiet" href="https://opentexai.vercel.app/app/conversions">Library</a>
+          <a class="btn-primary nav" href="https://opentexai.vercel.app/app">
+            <span>Open Workspace</span>
+            <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+          </a>
+        </div>
+
+        <button
+          id="nav-toggle"
+          class="nav-toggle"
+          type="button"
+          aria-label="Open navigation menu"
+          aria-expanded="false"
+          aria-controls="mobile-nav"
+        >
+          <svg id="icon-menu" class="icon icon-lg" viewBox="0 0 24 24" aria-hidden="true">
+            <line x1="4" x2="20" y1="12" y2="12" />
+            <line x1="4" x2="20" y1="6" y2="6" />
+            <line x1="4" x2="20" y1="18" y2="18" />
+          </svg>
+          <svg id="icon-close" class="icon icon-lg" viewBox="0 0 24 24" aria-hidden="true" hidden>
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div id="mobile-nav" class="mobile-nav" hidden>
+        <nav class="mobile-links" aria-label="Mobile">
+          <a href="#workflow">Workflow</a>
+          <a href="#toolkit">Toolkit</a>
+          <a href="#presentations">Slides</a>
+          <a href="#mcp">MCP</a>
+          <a href="#faq">FAQ</a>
+          <div class="mobile-actions">
+            <a class="btn-outline" href="https://opentexai.vercel.app/app/conversions">Library</a>
+            <a class="btn-primary block" href="https://opentexai.vercel.app/app">Open Workspace</a>
+          </div>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="container">
+          <div class="hero-copy">
+            <h1>Typeset handwritten math into LaTeX in seconds.</h1>
+            <p class="hero-lead">
+              Upload a photo of lecture notes, drop in a scanned PDF, or sketch equations on the canvas. OpenTEX outputs compilable LaTeX, Beamer slide decks, and TikZ diagrams.
+            </p>
+            <div class="hero-actions">
+              <a class="btn-primary btn-lg" href="https://opentexai.vercel.app/app">
+                <span>Open Workspace</span>
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+              </a>
+              <a class="btn-secondary btn-lg" href="#workflow">See how it works</a>
+            </div>
+          </div>
+
+          <div class="workbench">
+            <div class="workbench-bar">
+              <div class="file-cluster">
+                <span id="sample-file" class="file-name">limits_definition.tex</span>
+                <span class="file-meta">· Live sample</span>
+              </div>
+              <div class="segmented" role="group" aria-label="Sample notes">
+                <button type="button" class="is-active" data-sample-btn="limits" aria-pressed="true">Limits</button>
+                <button type="button" data-sample-btn="matrices" aria-pressed="false">Matrices</button>
+                <button type="button" data-sample-btn="integrals" aria-pressed="false">Integrals</button>
+              </div>
+            </div>
+
+            <div class="workbench-body">
+              <div class="note-pane">
+                <div class="pane-label">
+                  <span>Input note</span>
+                  <span class="mono">PNG / PDF</span>
+                </div>
+                <div class="paper">
+                  <div class="sketch" data-sample-panel="limits">
+                    <div class="sketch-title">1. Limits. Definitions</div>
+                    <div class="sketch-body">
+                      Def: We say <span class="italic">lim<sub>x→a</sub> f(x) = L</span> if ∀ε &gt; 0, ∃δ &gt; 0 s.t.
+                    </div>
+                    <div class="sketch-box italic">0 &lt; |x − a| &lt; δ &nbsp;⇒&nbsp; |f(x) − L| &lt; ε</div>
+                    <svg class="limit-sketch" viewBox="0 0 260 66" aria-label="Limit epsilon-delta sketch">
+                      <line x1="16" y1="54" x2="244" y2="54" stroke="#8E8E93" stroke-width="1" />
+                      <line x1="28" y1="8" x2="28" y2="60" stroke="#8E8E93" stroke-width="1" />
+                      <path d="M 38 48 Q 110 42 150 26 T 236 12" fill="none" stroke="#1D1D1F" stroke-width="1.6" />
+                      <line x1="28" y1="26" x2="150" y2="26" stroke="#0071E3" stroke-dasharray="3 3" stroke-width="1" />
+                      <line x1="150" y1="26" x2="150" y2="54" stroke="#0071E3" stroke-dasharray="3 3" stroke-width="1" />
+                      <circle cx="150" cy="26" r="3" fill="#fff" stroke="#0071E3" stroke-width="1.8" />
+                      <text x="147" y="64" font-size="9" fill="#6E6E73" font-family="serif" font-style="italic">a</text>
+                      <text x="14" y="29" font-size="9" fill="#6E6E73" font-family="serif" font-style="italic">L</text>
+                    </svg>
+                  </div>
+
+                  <div class="sketch" data-sample-panel="matrices" hidden>
+                    <div class="sketch-title">2. Eigenvalues &amp; Diagonalization</div>
+                    <div class="sketch-body">
+                      Find <span class="italic">λ</span> where <span class="italic">det(A − λI) = 0</span>
+                    </div>
+                    <div class="sketch-box">A = [ 4 &nbsp; 1 ; &nbsp; 2 &nbsp; 3 ] &nbsp;→&nbsp; (λ − 5)(λ − 2) = 0</div>
+                    <div class="sketch-result">λ<sub>1</sub> = 5, &nbsp;λ<sub>2</sub> = 2 &nbsp;⇒&nbsp; A = PDP<sup>−1</sup></div>
+                  </div>
+
+                  <div class="sketch" data-sample-panel="integrals" hidden>
+                    <div class="sketch-title">3. Gaussian Integral</div>
+                    <div class="sketch-body sm">I = ∫<sub>−∞</sub><sup>∞</sup> e<sup>−x²</sup> dx</div>
+                    <div class="sketch-box">I² = ∫<sub>0</sub><sup>2π</sup> ∫<sub>0</sub><sup>∞</sup> e<sup>−r²</sup> r dr dθ = π</div>
+                    <div class="sketch-result strong">∴ &nbsp; I = √π</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="code-pane">
+                <div>
+                  <div class="pane-label">
+                    <span>Generated LaTeX</span>
+                    <span class="mono">amsmath · UTF-8</span>
+                  </div>
+
+                  <div class="code-lines" data-sample-panel="limits">
+                    <div class="code-line"><span class="ln">1</span><span class="code-text"><span class="tok-cmd">\section*</span><span class="tok-brace">{</span><span class="tok-plain">Limits. Definitions</span><span class="tok-brace">}</span></span></div>
+                    <div class="code-line"><span class="ln">2</span><span class="code-text"><span class="tok-comment">% Transcribed with Publik AI</span></span></div>
+                    <div class="code-line"><span class="ln">3</span><span class="code-text"><span class="tok-cmd">\textbf</span><span class="tok-brace">{</span><span class="tok-plain">Precise Definition:</span><span class="tok-brace">} </span><span class="tok-plain">We say </span><span class="tok-math">$\lim_{x \to a} f(x) = L$</span></span></div>
+                    <div class="code-line"><span class="ln">4</span><span class="code-text"><span class="tok-plain">if for every </span><span class="tok-math">$\varepsilon &gt; 0$</span><span class="tok-plain"> there is </span><span class="tok-math">$\delta &gt; 0$</span><span class="tok-plain"> such that</span></span></div>
+                    <div class="code-line"><span class="ln">5</span><span class="code-text"><span class="tok-brace">\[</span></span></div>
+                    <div class="code-line"><span class="ln">6</span><span class="code-text"><span class="tok-math">  0 &lt; |x - a| &lt; \delta \implies |f(x) - L| &lt; \varepsilon.</span></span></div>
+                    <div class="code-line"><span class="ln">7</span><span class="code-text"><span class="tok-brace">\]</span></span></div>
+                  </div>
+
+                  <div class="code-lines" data-sample-panel="matrices" hidden>
+                    <div class="code-line"><span class="ln">1</span><span class="code-text"><span class="tok-cmd">\section*</span><span class="tok-brace">{</span><span class="tok-plain">Eigenvalues \&amp; Diagonalization</span><span class="tok-brace">}</span></span></div>
+                    <div class="code-line"><span class="ln">2</span><span class="code-text"><span class="tok-comment">% Linear Algebra, Chapter 4</span></span></div>
+                    <div class="code-line"><span class="ln">3</span><span class="code-text"><span class="tok-plain">Find </span><span class="tok-math">$\lambda$</span><span class="tok-plain"> where </span><span class="tok-math">$\det(A - \lambda I) = 0$</span><span class="tok-plain">:</span></span></div>
+                    <div class="code-line"><span class="ln">4</span><span class="code-text"><span class="tok-brace">\[</span></span></div>
+                    <div class="code-line"><span class="ln">5</span><span class="code-text"><span class="tok-math">  A = </span><span class="tok-cmd">\begin{pmatrix}</span><span class="tok-math"> 4 &amp; 1 \\ 2 &amp; 3 </span><span class="tok-cmd">\end{pmatrix}</span></span></div>
+                    <div class="code-line"><span class="ln">6</span><span class="code-text"><span class="tok-math">  \det(A - \lambda I) = (\lambda - 5)(\lambda - 2) = 0</span></span></div>
+                    <div class="code-line"><span class="ln">7</span><span class="code-text"><span class="tok-brace">\]</span></span></div>
+                    <div class="code-line"><span class="ln">8</span><span class="code-text"> </span></div>
+                    <div class="code-line"><span class="ln">9</span><span class="code-text"><span class="tok-cmd">\begin</span><span class="tok-brace">{</span><span class="tok-plain">equation</span><span class="tok-brace">}</span></span></div>
+                    <div class="code-line"><span class="ln">10</span><span class="code-text"><span class="tok-math">  \lambda_1 = 5,\; \lambda_2 = 2 \implies A = P D P^{-1}</span></span></div>
+                    <div class="code-line"><span class="ln">11</span><span class="code-text"><span class="tok-cmd">\end</span><span class="tok-brace">{</span><span class="tok-plain">equation</span><span class="tok-brace">}</span></span></div>
+                  </div>
+
+                  <div class="code-lines" data-sample-panel="integrals" hidden>
+                    <div class="code-line"><span class="ln">1</span><span class="code-text"><span class="tok-cmd">\section*</span><span class="tok-brace">{</span><span class="tok-plain">Gaussian \&amp; Contour Integrals</span><span class="tok-brace">}</span></span></div>
+                    <div class="code-line"><span class="ln">2</span><span class="code-text"><span class="tok-comment">% Multivariable Analysis</span></span></div>
+                    <div class="code-line"><span class="ln">3</span><span class="code-text"><span class="tok-plain">Let </span><span class="tok-math">$I = \int_{-\infty}^{\infty} e^{-x^2}\,dx$</span><span class="tok-plain">. Passing to polar coordinates:</span></span></div>
+                    <div class="code-line"><span class="ln">4</span><span class="code-text"><span class="tok-brace">\[</span></span></div>
+                    <div class="code-line"><span class="ln">5</span><span class="code-text"><span class="tok-math">  I^2 = \int_0^{2\pi} \int_0^{\infty} e^{-r^2} r\,dr\,d\theta = \pi</span></span></div>
+                    <div class="code-line"><span class="ln">6</span><span class="code-text"><span class="tok-math">  \implies I = \sqrt{\pi}.</span></span></div>
+                    <div class="code-line"><span class="ln">7</span><span class="code-text"><span class="tok-brace">\]</span></span></div>
+                  </div>
+                </div>
+
+                <div class="code-footer">
+                  <div class="status-ok">
+                    <span class="dot"></span>
+                    <span>Compiled cleanly</span>
+                  </div>
+                  <div class="code-actions">
+                    <button id="copy-sample" class="btn-ghost-dark sample" type="button">
+                      <svg class="icon icon-sm copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                      </svg>
+                      <svg class="icon icon-sm check-icon ok" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M20 6 9 17l-5-5" /></svg>
+                      <span class="copy-label">Copy</span>
+                    </button>
+                    <button id="open-overleaf" class="btn-primary compact" type="button">
+                      <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M15 3h6v6" />
+                        <path d="M10 14 21 3" />
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                      </svg>
+                      <span>Open in Overleaf</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="export-strip">
+            <span class="label">Exports to</span>
+            <span>Overleaf</span>
+            <span>Word (.docx)</span>
+            <span>Typst (.typ)</span>
+            <span>Markdown (.md)</span>
+            <span>Beamer Slides</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="workflow" class="section section-white">
+        <div class="container">
+          <div class="prose-narrow">
+            <h2 class="section-title">From rough notebook page to typeset manuscript.</h2>
+            <p class="lead">Five focused steps keep source code, compiled preview, and export formats synchronized without leaving your workspace.</p>
+          </div>
+
+          <div class="split split-6 mt-12">
+            <div class="inspector workflow-inspector">
+              <div class="inspector-head">
+                <span class="inspector-file" data-step-file="0" hidden>input_scan.png</span>
+                <span class="inspector-file" data-step-file="1" hidden>layout_parse.json</span>
+                <span class="inspector-file" data-step-file="2">main.tex</span>
+                <span class="inspector-file" data-step-file="3" hidden>main.tex</span>
+                <span class="inspector-file" data-step-file="4" hidden>exports/</span>
+                <span class="badge-ok">
+                  <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" /></svg>
+                  <span data-step-badge="0" hidden>Ready for OCR</span>
+                  <span data-step-badge="1" hidden>AST extracted</span>
+                  <span data-step-badge="2">Compiled</span>
+                  <span data-step-badge="3" hidden>Live preview</span>
+                  <span data-step-badge="4" hidden>Exported</span>
+                </span>
+              </div>
+              <pre class="snippet" data-step-panel="0" hidden>% Source file queued for transcription
+% Mode: Publik Vision (publik-smart)
+% Detected: integrals, nested fractions, theorem blocks</pre>
+              <pre class="snippet" data-step-panel="1" hidden>% Parsed document structure:
+%   - Heading: Fundamental Theorem of Calculus
+%   - Environments: theorem (1), equation (2)</pre>
+              <pre class="snippet" data-step-panel="2">\documentclass[11pt]{article}
+\usepackage{amsmath, amssymb, amsthm}
+\begin{equation}
+  F(x) = \int_{a}^{x} f(t)\,dt, \quad F'(x) = f(x)
+\end{equation}</pre>
+              <pre class="snippet" data-step-panel="3" hidden>\begin{theorem}[Evaluation Theorem]
+  If $f$ is continuous on $[a,b]$ and $G'=f$, then
+  \[ \int_{a}^{b} f(x)\,dx = G(b) - G(a). \]
+\end{theorem}</pre>
+              <pre class="snippet" data-step-panel="4" hidden>Output targets:
+  main.tex        (LaTeX source)
+  main.pdf        (Academic print layout)
+  main.typ        (Typst document)
+  Overleaf        (One-click project post)</pre>
+              <div class="inspector-foot">
+                <span class="tabular">Step <span id="step-current">3</span> of 5</span>
+                <span>Publik AI pipeline</span>
+              </div>
+            </div>
+
+            <ol class="stepper">
+              <li>
+                <button class="step-btn" type="button" data-step-btn="0" aria-pressed="false">
+                  <span class="step-icon">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="17 8 12 3 7 8" />
+                      <line x1="12" x2="12" y1="3" y2="15" />
+                    </svg>
+                  </span>
+                  <span>
+                    <span class="step-heading"><span class="step-kicker">01</span><span class="step-title">Upload Notes or Sketch</span></span>
+                    <span class="step-desc">Drop a PNG, JPEG, or multi-page PDF, or draw equations directly on the canvas sketchpad.</span>
+                  </span>
+                </button>
+              </li>
+              <li>
+                <button class="step-btn" type="button" data-step-btn="1" aria-pressed="false">
+                  <span class="step-icon">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <rect width="16" height="16" x="4" y="4" rx="2" />
+                      <rect width="6" height="6" x="9" y="9" rx="1" />
+                      <path d="M15 2v2" /><path d="M15 20v2" /><path d="M2 15h2" /><path d="M2 9h2" />
+                      <path d="M20 15h2" /><path d="M20 9h2" /><path d="M9 2v2" /><path d="M9 20v2" />
+                    </svg>
+                  </span>
+                  <span>
+                    <span class="step-heading"><span class="step-kicker">02</span><span class="step-title">Structural Analysis</span></span>
+                    <span class="step-desc">Identifies section hierarchy, theorem environments, aligned derivations, and margin notes.</span>
+                  </span>
+                </button>
+              </li>
+              <li>
+                <button class="step-btn is-selected" type="button" data-step-btn="2" aria-pressed="true">
+                  <span class="step-icon">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m18 16 4-4-4-4" />
+                      <path d="m6 8-4 4 4 4" />
+                      <path d="m14.5 4-5 16" />
+                    </svg>
+                  </span>
+                  <span>
+                    <span class="step-heading"><span class="step-kicker">03</span><span class="step-title">LaTeX Typesetting</span></span>
+                    <span class="step-desc">Outputs semantic amsmath and amsthm code tailored to your chosen preset and spacing.</span>
+                  </span>
+                </button>
+              </li>
+              <li>
+                <button class="step-btn" type="button" data-step-btn="3" aria-pressed="false">
+                  <span class="step-icon">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 20h9" />
+                      <path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" />
+                    </svg>
+                  </span>
+                  <span>
+                    <span class="step-heading"><span class="step-kicker">04</span><span class="step-title">Edit Alongside KaTeX</span></span>
+                    <span class="step-desc">Verify rendered math in real time, highlight blocks for AI edits, or toggle Classic, Tagged, and Boxed styles.</span>
+                  </span>
+                </button>
+              </li>
+              <li>
+                <button class="step-btn" type="button" data-step-btn="4" aria-pressed="false">
+                  <span class="step-icon">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="18" cy="5" r="3" />
+                      <circle cx="6" cy="12" r="3" />
+                      <circle cx="18" cy="19" r="3" />
+                      <line x1="8.59" x2="15.42" y1="13.51" y2="17.49" />
+                      <line x1="15.41" x2="8.59" y1="6.51" y2="10.49" />
+                    </svg>
+                  </span>
+                  <span>
+                    <span class="step-heading"><span class="step-kicker">05</span><span class="step-title">Export Anywhere</span></span>
+                    <span class="step-desc">Send straight to Overleaf, print to PDF, or convert to Word, OpenDocument, Typst, Markdown, or Beamer.</span>
+                  </span>
+                </button>
+              </li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <section id="toolkit" class="section section-gray">
+        <div class="container">
+          <div class="prose-narrow">
+            <h2 class="section-title">Six post-conversion tools built into one inspector.</h2>
+            <p class="lead">Refine layouts, translate text, convert file formats, or turn hand-drawn plots into TikZ without switching apps.</p>
+          </div>
+
+          <div class="split split-5-7 mt-12">
+            <div class="tool-list">
+              <button class="tool-btn is-selected" type="button" data-tool-btn="format" aria-pressed="true">
+                <span class="tool-main">
+                  <span class="tool-icon">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <line x1="4" x2="4" y1="21" y2="14" /><line x1="4" x2="4" y1="10" y2="3" />
+                      <line x1="12" x2="12" y1="21" y2="12" /><line x1="12" x2="12" y1="8" y2="3" />
+                      <line x1="20" x2="20" y1="21" y2="16" /><line x1="20" x2="20" y1="12" y2="3" />
+                      <line x1="2" x2="6" y1="14" y2="14" /><line x1="10" x2="14" y1="8" y2="8" /><line x1="18" x2="22" y1="16" y2="16" />
+                    </svg>
+                  </span>
+                  <span><span class="tool-name">Format</span><span class="tool-sub">Academic spacing and margins</span></span>
+                </span>
+                <svg class="icon tool-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+              </button>
+              <button class="tool-btn" type="button" data-tool-btn="translate" aria-pressed="false">
+                <span class="tool-main">
+                  <span class="tool-icon">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m5 8 6 6" /><path d="m4 14 6-6 2-3" /><path d="M2 5h12" /><path d="M7 2h1" />
+                      <path d="m22 22-5-10-5 10" /><path d="M14 18h6" />
+                    </svg>
+                  </span>
+                  <span><span class="tool-name">Translate</span><span class="tool-sub">Prose translation, math untouched</span></span>
+                </span>
+                <svg class="icon tool-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+              </button>
+              <button class="tool-btn" type="button" data-tool-btn="templates" aria-pressed="false">
+                <span class="tool-main">
+                  <span class="tool-icon">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <rect width="18" height="7" x="3" y="3" rx="1" />
+                      <rect width="9" height="7" x="3" y="14" rx="1" />
+                      <rect width="5" height="7" x="16" y="14" rx="1" />
+                    </svg>
+                  </span>
+                  <span><span class="tool-name">Templates</span><span class="tool-sub">Publication layouts</span></span>
+                </span>
+                <svg class="icon tool-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+              </button>
+              <button class="tool-btn" type="button" data-tool-btn="convert" aria-pressed="false">
+                <span class="tool-main">
+                  <span class="tool-icon">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+                      <path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M12 18v-6" /><path d="m9 15 3 3 3-3" />
+                    </svg>
+                  </span>
+                  <span><span class="tool-name">Convert</span><span class="tool-sub">Multi-format document export</span></span>
+                </span>
+                <svg class="icon tool-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+              </button>
+              <button class="tool-btn" type="button" data-tool-btn="suggestions" aria-pressed="false">
+                <span class="tool-main">
+                  <span class="tool-icon">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72" />
+                      <path d="m14 7 3 3" /><path d="M5 6v4" /><path d="M19 14v4" /><path d="M10 2v2" />
+                      <path d="M7 8H3" /><path d="M21 16h-4" /><path d="M11 3H9" />
+                    </svg>
+                  </span>
+                  <span><span class="tool-name">Suggestions</span><span class="tool-sub">Targeted inline rewrites</span></span>
+                </span>
+                <svg class="icon tool-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+              </button>
+              <button class="tool-btn" type="button" data-tool-btn="sketch" aria-pressed="false">
+                <span class="tool-main">
+                  <span class="tool-icon">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M15.707 21.293a1 1 0 0 1-1.414 0l-1.586-1.586a1 1 0 0 1 0-1.414l5.586-5.586a1 1 0 0 1 1.414 0l1.586 1.586a1 1 0 0 1 0 1.414z" />
+                      <path d="m18 13-1.375-6.874a1 1 0 0 0-.746-.776L3.235 2.028a1 1 0 0 0-1.207 1.207L5.35 15.879a1 1 0 0 0 .776.746L13 18" />
+                      <path d="m2.3 2.3 7.286 7.286" /><circle cx="11" cy="11" r="2" />
+                    </svg>
+                  </span>
+                  <span><span class="tool-name">Sketch</span><span class="tool-sub">Vector SVG and TikZ diagrams</span></span>
+                </span>
+                <svg class="icon tool-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+              </button>
+            </div>
+
+            <div>
+              <article class="tool-card" data-tool-panel="format">
+                <div class="tool-card-head">
+                  <div>
+                    <p class="eyebrow">Academic spacing and margins</p>
+                    <h3>Format Tool</h3>
+                  </div>
+                  <a class="btn-primary tool" href="https://opentexai.vercel.app/app/tools?tool=format">
+                    <span>Open Format</span>
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+                  </a>
+                </div>
+                <p class="tool-desc">Normalize line spacing, font sizes, paper margins, alignment, and page numbering across rough drafts.</p>
+                <ul class="bullets">
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>1.0, 1.5, or 2.0 line spacing with setspace</span></li>
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Configurable geometry margins (1.27 cm to 3.18 cm)</span></li>
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Automatic section and equation numbering</span></li>
+                </ul>
+                <div class="preview-code">
+                  <header>Output preview</header>
+                  <pre>\documentclass[12pt]{article}
+\usepackage[margin=2.54cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing</pre>
+                </div>
+              </article>
+
+              <article class="tool-card" data-tool-panel="translate" hidden>
+                <div class="tool-card-head">
+                  <div>
+                    <p class="eyebrow">Prose translation, math untouched</p>
+                    <h3>Translate Tool</h3>
+                  </div>
+                  <a class="btn-primary tool" href="https://opentexai.vercel.app/app/tools?tool=translate">
+                    <span>Open Translate</span>
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+                  </a>
+                </div>
+                <p class="tool-desc">Translate narrative proofs, captions, and section titles across 12 languages while preserving every formula.</p>
+                <ul class="bullets">
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Preserves LaTeX macros and inline math verbatim</span></li>
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Supports 12 academic languages</span></li>
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Keeps theorem and proof structure intact</span></li>
+                </ul>
+                <div class="preview-code">
+                  <header>Output preview</header>
+                  <pre>\section*{Teorema del Valor Medio}
+Sea $f$ continua en $[a,b]$ y derivable en $(a,b)$:
+\[ f'(c) = \frac{f(b)-f(a)}{b-a} \]</pre>
+                </div>
+              </article>
+
+              <article class="tool-card" data-tool-panel="templates" hidden>
+                <div class="tool-card-head">
+                  <div>
+                    <p class="eyebrow">Publication layouts</p>
+                    <h3>Templates Tool</h3>
+                  </div>
+                  <a class="btn-primary tool" href="https://opentexai.vercel.app/app/tools?tool=templates">
+                    <span>Open Templates</span>
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+                  </a>
+                </div>
+                <p class="tool-desc">Switch between Academic, Two-Column Journal, Classic Serif, or Minimal handouts in a single pass.</p>
+                <ul class="bullets">
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Single-column and twocolumn journal preambles</span></li>
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Configured hyperref, booktabs, and fancyhdr packages</span></li>
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Optional title block and abstract scaffold</span></li>
+                </ul>
+                <div class="preview-code">
+                  <header>Output preview</header>
+                  <pre>\documentclass[11pt,twocolumn]{article}
+\usepackage{amsmath, amssymb, booktabs, balance}
+\begin{abstract} ... \end{abstract}</pre>
+                </div>
+              </article>
+
+              <article class="tool-card" data-tool-panel="convert" hidden>
+                <div class="tool-card-head">
+                  <div>
+                    <p class="eyebrow">Multi-format document export</p>
+                    <h3>Convert Tool</h3>
+                  </div>
+                  <a class="btn-primary tool" href="https://opentexai.vercel.app/app/tools?tool=convert">
+                    <span>Open Convert</span>
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+                  </a>
+                </div>
+                <p class="tool-desc">Export LaTeX sources into Word (.docx), OpenDocument (.odt), Typst (.typ), or clean Markdown (.md).</p>
+                <ul class="bullets">
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Typst math syntax translation</span></li>
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Editable Word and LibreOffice exports</span></li>
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Markdown output with $ and $$ delimiters</span></li>
+                </ul>
+                <div class="preview-code">
+                  <header>Output preview</header>
+                  <pre>= Spectral Decomposition
+Every real symmetric $A$ satisfies:
+$ A = Q Lambda Q^T, quad Q^T Q = I $</pre>
+                </div>
+              </article>
+
+              <article class="tool-card" data-tool-panel="suggestions" hidden>
+                <div class="tool-card-head">
+                  <div>
+                    <p class="eyebrow">Targeted inline rewrites</p>
+                    <h3>Suggestions Tool</h3>
+                  </div>
+                  <a class="btn-primary tool" href="https://opentexai.vercel.app/app/tools?tool=suggestions">
+                    <span>Open Suggestions</span>
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+                  </a>
+                </div>
+                <p class="tool-desc">Select any theorem or proof inside the editor and describe the refinement you want to inspect before applying.</p>
+                <ul class="bullets">
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Side-by-side proposal preview with Accept or Reject</span></li>
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Expands terse derivations step by step</span></li>
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Fixes broken delimiters and environment tags</span></li>
+                </ul>
+                <div class="preview-code">
+                  <header>Output preview</header>
+                  <pre>\begin{proof}
+  Applying Cauchy-Schwarz yields
+  $|\langle u, v \rangle|^2 \leq \|u\|^2 \|v\|^2$.
+\end{proof}</pre>
+                </div>
+              </article>
+
+              <article class="tool-card" data-tool-panel="sketch" hidden>
+                <div class="tool-card-head">
+                  <div>
+                    <p class="eyebrow">Vector SVG and TikZ diagrams</p>
+                    <h3>Sketch Tool</h3>
+                  </div>
+                  <a class="btn-primary tool" href="https://opentexai.vercel.app/app/tools?tool=sketch">
+                    <span>Open Sketch</span>
+                    <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+                  </a>
+                </div>
+                <p class="tool-desc">Draw on the canvas or crop an existing figure to generate scalable SVG artwork and editable TikZ code.</p>
+                <ul class="bullets">
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Interactive crop selection on uploaded scans</span></li>
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>Outputs standalone SVG plus tikzpicture code</span></li>
+                  <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg><span>One-click insertion into active main.tex</span></li>
+                </ul>
+                <div class="preview-code">
+                  <header>Output preview</header>
+                  <pre>\begin{tikzpicture}[scale=1.1]
+  \draw[-&gt;] (-2,0) -- (2,0) node[right] {$x$};
+  \draw[thick,blue] plot[domain=-1.4:1.4] (\x,{\x*\x});
+\end{tikzpicture}</pre>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="presentations" class="section section-white">
+        <div class="container">
+          <div class="section-head">
+            <div class="prose-narrow">
+              <h2 class="section-title">Typeset Beamer slide decks directly from lecture notes.</h2>
+              <p class="lead">Choose from six Beamer themes, five color palettes, and brief to extended deck lengths, then inspect every slide before exporting to Overleaf.</p>
+            </div>
+            <a class="btn-dark" href="https://opentexai.vercel.app/app/slides">
+              <span>Open Slides Studio</span>
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+            </a>
+          </div>
+
+          <div class="preview-shell">
+            <div class="preview-bar">
+              <div class="chrome-label">
+                <span class="mono">opentex.app/slides</span>
+                <span class="theme-note">· <span id="theme-label">Classic rounded blocks</span></span>
+              </div>
+              <div class="segmented" role="group" aria-label="Beamer theme">
+                <button type="button" class="is-active" data-theme-btn="Madrid" aria-pressed="true">Madrid</button>
+                <button type="button" data-theme-btn="Warsaw" aria-pressed="false">Warsaw</button>
+                <button type="button" data-theme-btn="Berlin" aria-pressed="false">Berlin</button>
+              </div>
+            </div>
+            <div class="slide-stage">
+              <article id="slide" class="slide" data-theme="Madrid">
+                <div class="slide-header">
+                  <div class="slide-kicker">
+                    <span>Section 2 · Spectral Theory</span>
+                    <span>\usetheme{<span id="theme-name">Madrid</span>}</span>
+                  </div>
+                  <h3>The Spectral Theorem for Symmetric Matrices</h3>
+                </div>
+                <div class="slide-body">
+                  <div class="theorem">
+                    <div class="slide-block-title">Theorem (Real Spectral Decomposition)</div>
+                    <div class="theorem-body">
+                      Every real symmetric matrix <span class="italic">A = A<sup>T</sup></span> in
+                      ℝ<sup>n × n</sup> is orthogonally diagonalizable:
+                      <div class="equation">A = Q Λ Q<sup>T</sup>, &nbsp;&nbsp; Q<sup>T</sup>Q = I</div>
+                      All eigenvalues are real and eigenvectors from distinct eigenspaces are orthogonal.
+                    </div>
+                  </div>
+                  <ul class="slide-notes">
+                    <li>Real eigenvalues guarantee stability in quadratic forms.</li>
+                    <li>Exports as compilable LaTeX Beamer code or printable PDF slides.</li>
+                  </ul>
+                </div>
+                <div class="slide-footer">
+                  <span>OpenTEX Beamer</span>
+                  <span>Linear Algebra</span>
+                  <span class="tabular">1 / 1</span>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="mcp" class="section section-gray">
+        <div class="container">
+          <div class="split split-6 loose mcp-layout">
+            <div>
+              <h2 class="section-title">Batch-convert entire folders from your coding agent.</h2>
+              <p class="lead">Connect OpenTEX directly to your local MCP client to convert directories of scanned notes and PDFs without leaving your terminal.</p>
+              <div class="client-pills">
+                <span>Claude Code</span>
+                <span>Codex</span>
+                <span>Cursor</span>
+                <span>Claude Desktop</span>
+              </div>
+              <ol class="mcp-steps">
+                <li>
+                  <span class="mcp-num">1</span>
+                  <div>
+                    <h3>Create an MCP key</h3>
+                    <p>Generate a local token in Settings with zero rate or page caps.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="mcp-num">2</span>
+                  <div>
+                    <h3>Register the endpoint</h3>
+                    <p>Run the setup command or add the JSON server entry to Claude Desktop or Cursor.</p>
+                  </div>
+                </li>
+                <li>
+                  <span class="mcp-num">3</span>
+                  <div>
+                    <h3>Convert whole folders</h3>
+                    <p>Ask your coding or research agent to turn an entire directory of PDFs into .tex files.</p>
+                  </div>
+                </li>
+              </ol>
+              <a class="text-link" href="https://opentexai.vercel.app/app/mcp-guide">
+                <span>Read the MCP setup guide</span>
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+              </a>
+            </div>
+
+            <div class="terminal">
+              <div class="terminal-head">
+                <span class="terminal-title">
+                  <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true">
+                    <polyline points="4 17 10 11 4 5" />
+                    <line x1="12" x2="20" y1="19" y2="19" />
+                  </svg>
+                  ~/Notes · Claude Code
+                </span>
+                <button id="copy-mcp" class="btn-ghost-dark tiny" type="button">
+                  <svg class="icon icon-xs copy-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                  </svg>
+                  <svg class="icon icon-xs check-icon ok" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M20 6 9 17l-5-5" /></svg>
+                  <span class="copy-label">Copy</span>
+                </button>
+              </div>
+              <div class="terminal-body">
+                <div class="prompt-line">
+                  <span class="dollar">$</span> npx -y @opentex-app/mcp setup
+                  <div class="registered">
+                    <svg class="icon icon-sm ok" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+                    <span>Registered @opentex-app/mcp</span>
+                  </div>
+                </div>
+                <div class="prompt"><span class="chev">&gt;</span> Convert all PDFs in ./analysis-hw to LaTeX</div>
+                <div class="mcp-calls">
+                  <div class="mcp-row">
+                    <div><span class="cmd">plan_conversion</span><span class="meta"> · 3 PDFs, 24 pages, Free</span></div>
+                    <svg class="icon icon-sm ok" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+                  </div>
+                  <div class="mcp-row">
+                    <div><span class="cmd">convert_files</span><span class="meta"> · Publik AI batch queue</span></div>
+                    <svg class="icon icon-sm ok" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+                  </div>
+                  <div class="mcp-row">
+                    <div><span class="cmd">get_job_status</span><span class="meta"> · 3/3 .tex files saved</span></div>
+                    <svg class="icon icon-sm ok" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="faq" class="section section-white">
+        <div class="container">
+          <div class="split faq-layout loose">
+            <div class="faq-intro">
+              <h2 class="section-title">Common questions.</h2>
+              <p class="lead-sm">Details on Publik AI model routing, local privacy, exports, and MCP automation.</p>
+              <div class="faq-cta">
+                <a class="btn-primary faq" href="https://opentexai.vercel.app/app">
+                  <span>Open Workspace</span>
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+                </a>
+              </div>
+            </div>
+
+            <div class="faq-list">
+              <div class="faq-item is-open">
+                <button class="faq-toggle" type="button" aria-expanded="true">
+                  <span>Is OpenTEX completely free?</span>
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                </button>
+                <div class="faq-answer">Yes. Every conversion mode, document tool, Beamer slide generator, and MCP endpoint runs without pricing tiers, credits, or page limits.</div>
+              </div>
+              <div class="faq-item">
+                <button class="faq-toggle" type="button" aria-expanded="false">
+                  <span>What is the difference between the Professional and Turbo models?</span>
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                </button>
+                <div class="faq-answer" hidden>Professional maps to publik-smart for dense handwritten derivations, matrices, and sketches. Turbo maps to publik-fast for rapid conversion of clean typeset PDFs.</div>
+              </div>
+              <div class="faq-item">
+                <button class="faq-toggle" type="button" aria-expanded="false">
+                  <span>How does the Publik AI integration work?</span>
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                </button>
+                <div class="faq-answer" hidden>OpenTEX calls OpenAI-compatible Publik AI endpoints at https://publikhq.com/api/v1. You can also supply your own OpenAI-compatible endpoint or API key in Settings, and an offline fallback runs automatically when no key is set.</div>
+              </div>
+              <div class="faq-item">
+                <button class="faq-toggle" type="button" aria-expanded="false">
+                  <span>Where are my conversions and folders stored?</span>
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                </button>
+                <div class="faq-answer" hidden>Your saved conversions, folders, communities, and preferences remain locally in your browser storage. You can export your entire library as a .zip archive or delete history at any time.</div>
+              </div>
+              <div class="faq-item">
+                <button class="faq-toggle" type="button" aria-expanded="false">
+                  <span>Which export formats are supported?</span>
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                </button>
+                <div class="faq-answer" hidden>You can copy raw LaTeX, open directly in Overleaf, print to PDF, or convert to Word (.docx), OpenDocument (.odt), Typst (.typ), Markdown (.md), and LaTeX Beamer presentations.</div>
+              </div>
+              <div class="faq-item">
+                <button class="faq-toggle" type="button" aria-expanded="false">
+                  <span>How does MCP batch conversion work?</span>
+                  <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                </button>
+                <div class="faq-answer" hidden>Generate a local MCP key in Settings and register @opentex-app/mcp in Claude Code, Codex, Cursor, or Claude Desktop to run plan_conversion, convert_files, and get_job_status over folders of notes.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-grid">
+        <div>
+          <a class="brand footer-brand" href="./">
+            <svg class="brand-mark" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+              <rect width="64" height="64" rx="14" fill="#1D1D1F" />
+              <path d="M16 17L27 47" stroke="#2997FF" stroke-width="6.5" stroke-linecap="round" />
+              <path d="M31 19H50M40.5 19V47" stroke="#FFFFFF" stroke-width="6.5" stroke-linecap="round" />
+            </svg>
+            <span>Open<span class="tex">TEX</span></span>
+          </a>
+          <p class="footer-blurb">Open-source LaTeX studio for converting handwritten math notes, scans, and PDFs into compilable TeX, Beamer slides, and TikZ diagrams.</p>
+        </div>
+        <div class="footer-links">
+          <div>
+            <h3>Product</h3>
+            <ul>
+              <li><a href="#workflow">Workflow</a></li>
+              <li><a href="#toolkit">Tools</a></li>
+              <li><a href="#presentations">Beamer Slides</a></li>
+              <li><a href="#mcp">MCP</a></li>
+              <li><a href="#faq">FAQ</a></li>
+            </ul>
+          </div>
+          <div>
+            <h3>Workspace</h3>
+            <ul>
+              <li><a href="https://opentexai.vercel.app/app">Convert Notes</a></li>
+              <li><a href="https://opentexai.vercel.app/app/slides">Slides</a></li>
+              <li><a href="https://opentexai.vercel.app/app/conversions">My Conversions</a></li>
+              <li><a href="https://opentexai.vercel.app/app/tools">Tools</a></li>
+              <li><a href="https://opentexai.vercel.app/app/communities">Communities</a></li>
+              <li><a href="https://opentexai.vercel.app/app/settings">Settings</a></li>
+              <li><a href="https://opentexai.vercel.app/app/mcp-guide">MCP Guide</a></li>
+              <li><a href="https://opentexai.vercel.app/app/help">Help &amp; Tips</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="container footer-bottom">
+        <span>© 2026 OpenTEX · MIT License</span>
+        <span>Powered by Publik AI</span>
+      </div>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
